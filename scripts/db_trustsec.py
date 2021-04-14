@@ -215,7 +215,7 @@ def merge_sgts(src, sgts, is_base, sync_session, log=None, obj=None):
                     else:
                         tag, created = Tag.objects.get_or_create(tag_number=tag_num,
                                                                  defaults={"name": s["name"],
-                                                                           "description": s["description"],
+                                                                           "description": s.get("description", "None"),
                                                                            "origin_ise": obj,
                                                                            "syncsession": sync_session})
                 if created:
