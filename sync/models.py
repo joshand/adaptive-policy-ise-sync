@@ -1243,6 +1243,12 @@ class PolicyData(models.Model):
 
         return None
 
+    def lookup_description(self, obj):
+        pdesc = obj.policy.description
+        if not pdesc:
+            pdesc = str(obj.policy.source_group.tag_number) + "-" + str(obj.policy.dest_group.tag_number)
+        return pdesc
+
     def lookup_sgt_data(self, obj):
         if obj.organization:
             src = TagData.objects.filter(Q(tag=obj.policy.source_group) & Q(organization=obj.organization) &
