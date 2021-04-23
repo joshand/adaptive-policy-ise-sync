@@ -422,6 +422,10 @@ def merge_sgpolicies(src, sgpolicies, is_base, sync_session, log=None, obj=None)
                         for a in acls:
                             # if a.acl not in pol.acl.all():
                             acl_set.append(a.acl)
+                        default_acl = ACLData.objects.filter(iseserver=None).filter(acl__name=s["catchAllRule"])
+                        if len(default_acl) > 0:
+                            append_log(log, "db_trustsec::merge_policies::default_acl::" + default_acl[0].acl.name)
+                            acl_set.append(default_acl[0])
                         pol.acl.set(acl_set)
                     else:
                         acls = ACLData.objects.filter(source_id__in=s["sgacls"])
