@@ -233,7 +233,7 @@ def digest_database_data(sa, log):
 
                 ret = ise.update_egressmatrixcell(o.source_id, srcsgt.source_id, dstsgt.source_id,
                                                   o.lookup_acl_catchall(o),
-                                                  acls=acls, description=o.policy.description,
+                                                  acls=acls, description=o.lookup_description(o),
                                                   return_object=True)
                 o.last_update = make_aware(datetime.datetime.now())
                 o.last_update_data = ret
@@ -242,7 +242,7 @@ def digest_database_data(sa, log):
                     o.source_id = ret["response"]["id"]
                     o.source_data = json.dumps(ret["response"])
                     append_log(log, "ise_monitor::digest_database_data::Push Policy update", o.source_id, o.policy.name,
-                               o.policy.description, ret)
+                               o.lookup_description(o), ret)
                 else:     # pragma: no cover
                     append_log(log, "ise_monitor::digest_database_data::Policy Null Return", ret)
                     o.update_failed = True
@@ -276,7 +276,7 @@ def digest_database_data(sa, log):
                     continue
 
                 ret = ise.add_egressmatrixcell(srcsgt.source_id, dstsgt.source_id, o.lookup_acl_catchall(o),
-                                               acls=acls, description=o.policy.description,
+                                               acls=acls, description=o.lookup_description(o),
                                                return_object=True)
                 o.last_update = make_aware(datetime.datetime.now())
                 o.last_update_data = ret
@@ -285,7 +285,7 @@ def digest_database_data(sa, log):
                     o.source_id = ret["response"]["id"]
                     o.source_data = json.dumps(ret["response"])
                     append_log(log, "ise_monitor::digest_database_data::Push Policy create", o.policy.name,
-                               o.policy.description, ret)
+                               o.lookup_description(o), ret)
                 else:     # pragma: no cover
                     append_log(log, "ise_monitor::digest_database_data::Policy Null Return", ret)
                     o.update_failed = True
