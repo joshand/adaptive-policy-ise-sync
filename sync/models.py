@@ -853,6 +853,12 @@ class Policy(models.Model):
     def object_update_target(self):
         return self.objects_match(get_target=True)
 
+    def render_text(self, data, attribute, src_sgt, dst_sgt):
+        txt = data.get(attribute, "UNKNOWN")
+        if txt == "":
+            txt = src_sgt.tag.name + "_" + dst_sgt.tag.name
+        return txt
+
     def objects_match(self, bool_only=False, get_target=False):
         full_match = True
         header = ["Source", "Name", "Cleaned Name", "Description", "Fuzzy Description", "Source", "Dest",
@@ -881,9 +887,9 @@ class Policy(models.Model):
 
                 a0 = o.hyperlink()
                 a1 = jo.get("name", "UNKNOWN")
-                a2 = re.sub('[^0-9a-zA-Z]+', '_', jo.get("name", "UNKNOWN")[:32])
+                a2 = re.sub('[^0-9a-zA-Z]+', '_', self.render_text(jo, "name", src_sgt, dst_sgt)[:32])
                 a3 = jo.get("description", "UNKNOWN")
-                a4 = jo.get("description", "UNKNOWN").translate(str.maketrans('', '', string.punctuation)).lower()
+                a4 = self.render_text(jo, "description", src_sgt, dst_sgt).translate(str.maketrans('', '', string.punctuation)).lower()
                 a5 = str(src_sgt.tag.tag_number) if src_sgt else "N/A"
                 a6 = str(dst_sgt.tag.tag_number) if dst_sgt else "N/A"
                 a7 = jo.get("catchAllRule", "UNKNOWN") if o.organization else jo.get("defaultRule", "UNKNOWN")
