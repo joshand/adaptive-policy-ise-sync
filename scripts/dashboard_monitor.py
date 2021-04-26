@@ -1,4 +1,4 @@
-from sync.models import SyncSession, TagData, ACLData, PolicyData
+from sync.models import SyncSession, TagData, ACLData, PolicyData, Dashboard
 from django.db.models import F, Q
 from django.utils.timezone import make_aware
 import datetime
@@ -13,20 +13,29 @@ from django.conf import settings
 import traceback
 
 
-def ingest_dashboard_data(accounts, log):
+def ingest_dashboard_data(accounts, log, org_only=False):
     append_log(log, "dashboard_monitor::ingest_dashboard_data::Accounts -", accounts)
     dt = make_aware(datetime.datetime.now())
 
     for sa in accounts:
-        if not sa.sync_enabled:
-            append_log(log, "dashboard_monitor::digest_database_data::sync session not set to allow sync;")
-            return
+        if not org_only:
+            if not sa.sync_enabled:
+                append_log(log, "dashboard_monitor::digest_database_data::sync session not set to allow sync;")
+                return
 
-        a = sa.dashboard
-        append_log(log, "dashboard_monitor::ingest_dashboard_data::Resync -", a.description)
-        dashboard = meraki.DashboardAPI(base_url=a.baseurl, api_key=a.apikey, print_console=False, output_log=False,
-                                        caller=settings.CUSTOM_UA, suppress_logging=True)
-        orgs = a.organization.all()
+            a = sa.dashboard
+            append_log(log, "dashboard_monitor::ingest_dashboard_data::Resync -", a.description)
+            dashboard = meraki.DashboardAPI(base_url=a.baseurl, api_key=a.apikey, print_console=False, output_log=False,
+                                            caller=settings.CUSTOM_UA, suppress_logging=True)
+            orgs = a.organization.all()
+            src = not sa.ise_source
+        else:
+            orgs = [sa]
+            db = sa.dashboard_set[0]
+            dashboard = meraki.DashboardAPI(base_url=db.baseurl, api_key=db.apikey, print_console=False, output_log=False,
+                                            caller=settings.CUSTOM_UA, suppress_logging=True)
+            src = False
+
         if orgs:
             for org in orgs:
                 org_id = org.orgid
@@ -38,13 +47,13 @@ def ingest_dashboard_data(accounts, log):
                 append_log(log, "dashboard_monitor::ingest_dashboard_data::SGACLs - ", len(sgacls))
                 append_log(log, "dashboard_monitor::ingest_dashboard_data::Policies - ", len(sgpolicies))
 
-                merge_sgts("meraki", sgts, not sa.ise_source, sa, log, org)
-                merge_sgacls("meraki", sgacls, not sa.ise_source, sa, log, org)
-                merge_sgpolicies("meraki", sgpolicies, not sa.ise_source, sa, log, org)
+                merge_sgts("meraki", sgts, src, sa, log, org)
+                merge_sgacls("meraki", sgacls, src, sa, log, org)
+                merge_sgpolicies("meraki", sgpolicies, src, sa, log, org)
 
-                clean_sgts("meraki", sgts, not sa.ise_source, sa, log, org)
-                clean_sgacls("meraki", sgacls, not sa.ise_source, sa, log, org)
-                clean_sgpolicies("meraki", sgpolicies, not sa.ise_source, sa, log, org)
+                clean_sgts("meraki", sgts, src, sa, log, org)
+                clean_sgacls("meraki", sgacls, src, sa, log, org)
+                clean_sgpolicies("meraki", sgpolicies, src, sa, log, org)
 
                 org.raw_data = json.dumps({"groups": sgts, "acls": sgacls, "bindings": sgpolicies})
                 org.force_rebuild = False
@@ -267,6 +276,10 @@ def sync_dashboard():
     log = []
     msg = "SYNC_DASHBOARD-NO_ACTION_REQUIRED"
     append_log(log, "dashboard_monitor::sync_dashboard::Checking Dashboard Accounts for re-sync...")
+
+    no_ss = Dashboard.objects.filter(syncsession__isnull=True)
+    append_log(log, "dashboard_monitor::sync_dashboard::Dashboard accounts not in session...", no_ss)
+    ingest_dashboard_data(no_ss, log, org_only=True)
 
     # If we know that something needs to be created, do that first.
     sss = SyncSession.objects.all()
