@@ -1,5 +1,5 @@
 from sync.models import ISEServer, Upload, UploadZip, Dashboard, Tag, ACL, Policy, SyncSession, Organization, TagData, \
-    ACLData, PolicyData
+    ACLData, PolicyData, Task
 from django.shortcuts import redirect, reverse, render
 from django.contrib.auth import logout
 from django.http import JsonResponse
@@ -633,6 +633,30 @@ def backuprestore(request):
         elif action == "DELETE":
             os.remove(a_list[1])
             msg = "Database Backup Deleted"
+        elif action == "RESET_ALL":
+            ISEServer.objects.all().delete()
+            Dashboard.objects.all().delete()
+            Organization.objects.all().delete()
+            SyncSession.objects.all().delete()
+            Task.objects.all().delete()
+            UploadZip.objects.all().delete()
+            Tag.objects.all().delete()
+            ACL.objects.all().delete()
+            Policy.objects.all().delete()
+            TagData.objects.all().delete()
+            ACLData.objects.all().delete()
+            PolicyData.objects.all().delete()
+            msg = "Database Cleared"
+        elif action == "RESET_OBJ":
+            Task.objects.all().delete()
+            Tag.objects.all().delete()
+            ACL.objects.all().delete()
+            Policy.objects.all().delete()
+            TagData.objects.all().delete()
+            ACLData.objects.all().delete()
+            PolicyData.objects.all().delete()
+            SyncSession.objects.all().update(sync_enabled=False)
+            msg = "Synced Objects Cleared"
 
     mypath = os.path.join(".", "config")
     # f = []
@@ -675,15 +699,16 @@ def iseconfig(request):
             ise_pxcp = request.POST.get("intPxClPass-" + itemid)
             ise_pxsc = request.POST.get("servercert-id-" + itemid)
             ise_rbld = True if request.POST.get("intRebuild-" + itemid) else False
-            crt_pxcc = Upload.objects.filter(id=ise_pxcc) if ise_pxcc else ""
-            crt_pxck = Upload.objects.filter(id=ise_pxck) if ise_pxck else ""
-            crt_pxsc = Upload.objects.filter(id=ise_pxsc) if ise_pxsc else ""
-            if len(crt_pxcc) == 1 and len(crt_pxck) == 1 and len(crt_pxsc) == 1:
+            crt_pxcc = Upload.objects.filter(id=ise_pxcc) if ise_pxcc else None
+            crt_pxck = Upload.objects.filter(id=ise_pxck) if ise_pxck else None
+            crt_pxsc = Upload.objects.filter(id=ise_pxsc) if ise_pxsc else None
+            if (crt_pxcc and len(crt_pxcc) == 1) and (crt_pxck and len(crt_pxck) == 1) and \
+                    (crt_pxsc and len(crt_pxsc) == 1):
                 crt_pxcc = crt_pxcc[0]
                 crt_pxck = crt_pxck[0]
                 crt_pxsc = crt_pxsc[0]
 
-            if itemid == "new":
+            if itemid == "new" or itemid == "":
                 ISEServer.objects.create(description=ise_desc, ipaddress=ise_host, username=ise_user, password=ise_pass,
                                          pxgrid_enable=ise_pxen, pxgrid_ip=ise_pxip, pxgrid_cliname=ise_pxcn,
                                          pxgrid_clicert=crt_pxcc, pxgrid_clikey=crt_pxck, pxgrid_clipw=ise_pxcp,
@@ -704,14 +729,30 @@ def iseconfig(request):
                                                                pxgrid_clikey=crt_pxck, pxgrid_clipw=ise_pxcp,
                                                                pxgrid_isecert=crt_pxsc, force_rebuild=ise_rbld)
 
-    iseservers = ISEServer.objects.all()
+    iseservers = ISEServer.objects.all().order_by("description")
     if len(iseservers) == 0:
         iseservers = [{"id": "new"}]
-    certs = Upload.objects.all()
+    certs = Upload.objects.all().order_by("uploadzip__description", "file")
 
-    crumbs = '<li class="current">Configuration</li><li class="current">ISE Server</li>'
-    return render(request, 'home/iseconfig.html', {"crumbs": crumbs, "menuopen": 2, "data": iseservers,
-                                                   "certs": certs})
+    thisid = request.GET.get("id")
+    if thisid:
+        if thisid == "new":
+            thisserver = None
+            serverdesc = "(New)"
+        else:
+            thisserver = iseservers.filter(id=thisid).first()
+            serverdesc = thisserver.description
+
+        crumbs = '''
+            <li class="current">Configuration</li>
+            <li><a href="/home/config-ise">ISE Servers</a></li>
+            <li class="current">''' + serverdesc + '''</li>
+        '''
+    else:
+        thisserver = None
+        crumbs = '<li class="current">Configuration</li><li class="current">ISE Servers</li>'
+    return render(request, 'home/iseconfig.html', {"crumbs": crumbs, "menuopen": 2, "i": thisserver,
+                                                   "certs": certs, "server_id": thisid, "servers": iseservers})
 
 
 def merakiconfig(request):
