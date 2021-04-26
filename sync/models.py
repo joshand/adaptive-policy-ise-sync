@@ -302,6 +302,7 @@ class ISEServer(models.Model):
                                        verbose_name="pxGrid Server Cert (.cer)", related_name='pxgrid_isecert')
     pxgrid_reset = models.BooleanField(default=True, editable=True)
     skip_update = models.BooleanField(default=False)
+    resync_timer = models.IntegerField(default=600)
 
     class Meta:
         verbose_name = "ISE Server"
@@ -321,6 +322,9 @@ class ISEServer(models.Model):
             return url
         else:
             return url + ":9060"
+
+    def is_past_due(self):
+        return datetime.date.today() > self.last_sync
 
 
 @receiver(post_save, sender=ISEServer)
@@ -1273,3 +1277,29 @@ class PolicyData(models.Model):
                 return src[0], dst[0]
 
         return None, None
+
+
+class TaskQueue(models.Model):
+    STATE_CHOICES = [
+        (1, 'New Task'),
+        (2, 'Running'),
+        (3, 'Task Successfully Ran'),
+        (4, 'Task Failed'),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    description = models.CharField("Task Description", max_length=50, blank=False, null=False)
+    function = models.CharField("App Function", max_length=75, blank=False, null=False)
+    data = models.JSONField(blank=True, null=True, default=None)
+    task_data = models.TextField(blank=True, null=True, default=None)
+    last_update = models.DateTimeField(default=django.utils.timezone.now)
+    priority = models.IntegerField(default=999)
+    state = models.IntegerField(
+        choices=STATE_CHOICES,
+        default=1,
+    )
+
+    def __str__(self):
+        return str(self.priority) + "::" + str(self.state) + "::" + self.description
+
+    class Meta:
+        ordering = ('-last_update',)
