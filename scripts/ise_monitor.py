@@ -1,4 +1,4 @@
-from sync.models import SyncSession, TagData, ACLData, PolicyData
+from sync.models import SyncSession, TagData, ACLData, PolicyData, ISEServer
 from django.db.models import F, Q
 from django.utils.timezone import make_aware
 import json
@@ -9,17 +9,25 @@ from ise import ERS
 import traceback
 
 
-def ingest_ise_data(accounts, log):
+def ingest_ise_data(accounts, log, server_only=False):
     append_log(log, "ise_monitor::ingest_server_data::Accounts -", accounts)
     dt = make_aware(datetime.datetime.now())
 
-    for sa in accounts:
-        if not sa.sync_enabled:
-            append_log(log, "ise_monitor::ingest_server_data::sync session not set to allow sync;")
-            return
+    for sync_account in accounts:
+        if not server_only:
+            if not sync_account.sync_enabled:
+                append_log(log, "ise_monitor::ingest_server_data::sync session not set to allow sync;")
+                return
 
-        ise = None
-        a = sa.iseserver
+            ise = None
+            a = sync_account.iseserver
+            src = sync_account.ise_source
+            sa = sync_account
+        else:
+            a = sync_account
+            src = False
+            sa = None
+
         append_log(log, "ise_monitor::ingest_server_data::Resync -", a.description)
         ise = ERS(ise_node=a.ipaddress, ers_user=a.username, ers_pass=a.password, verify=False, disable_warnings=True)
         sgts = ise.get_sgts(detail=True)
@@ -30,13 +38,13 @@ def ingest_ise_data(accounts, log):
         append_log(log, "ise_monitor::ingest_server_data::Policies - ", len(sgpolicies))
         ise = {"sgts": sgts, "sgacls": sgacls, "sgpolicies": sgpolicies}
 
-        merge_sgts("ise", sgts["response"], sa.ise_source, sa, log, a)
-        merge_sgacls("ise", sgacls["response"], sa.ise_source, sa, log, a)
-        merge_sgpolicies("ise", sgpolicies["response"], sa.ise_source, sa, log, a)
+        merge_sgts("ise", sgts["response"], src, sa, log, a)
+        merge_sgacls("ise", sgacls["response"], src, sa, log, a)
+        merge_sgpolicies("ise", sgpolicies["response"], src, sa, log, a)
 
-        clean_sgts("ise", sgts["response"], sa.ise_source, sa, log, a)
-        clean_sgacls("ise", sgacls["response"], sa.ise_source, sa, log, a)
-        clean_sgpolicies("ise", sgpolicies["response"], sa.ise_source, sa, log, a)
+        clean_sgts("ise", sgts["response"], src, sa, log, a)
+        clean_sgacls("ise", sgacls["response"], src, sa, log, a)
+        clean_sgpolicies("ise", sgpolicies["response"], src, sa, log, a)
 
         a.raw_data = json.dumps(ise)
         a.force_rebuild = False
@@ -305,6 +313,10 @@ def sync_ise():
     log = []
     msg = "SYNC_ISE-NO_ACTION_REQUIRED"
     append_log(log, "ise_monitor::sync_ise::Checking ISE Accounts for re-sync...")
+
+    no_ss = ISEServer.objects.filter(syncsession__isnull=True)
+    append_log(log, "ise_monitor::sync_ise::Servers not in session...", no_ss)
+    ingest_ise_data(no_ss, log, server_only=True)
 
     # If we know that something needs to be created, do that first.
     sss = SyncSession.objects.all()
