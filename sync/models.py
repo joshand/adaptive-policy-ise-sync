@@ -283,6 +283,7 @@ class ISEServer(models.Model):
     username = models.CharField(max_length=64, null=True, blank=True, default=None, verbose_name="ERS Username")
     password = models.CharField(max_length=64, null=True, blank=True, default=None, verbose_name="ERS Password")
     raw_data = models.TextField(blank=True, null=True, default=None)
+    enabled = models.BooleanField(default=True, editable=True)
     force_rebuild = models.BooleanField("Force Server Sync", default=False, editable=True)
     skip_sync = models.BooleanField(default=False, editable=False)
     last_update = models.DateTimeField(default=django.utils.timezone.now)
