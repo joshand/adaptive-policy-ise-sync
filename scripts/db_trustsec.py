@@ -363,9 +363,9 @@ def merge_sgpolicies(src, sgpolicies, is_base, sync_session, log=None, obj=None)
                 dst_grp = p_dst[0] if len(p_dst) > 0 else None
             elif src == "ise":
                 p_src = TagData.objects.filter(source_id=s["sourceSgtId"]).\
-                    filter(iseserver=sync_session.iseserver)
+                    filter(iseserver=obj)
                 p_dst = TagData.objects.filter(source_id=s["destinationSgtId"]).\
-                    filter(iseserver=sync_session.iseserver)
+                    filter(iseserver=obj)
                 src_grp = p_src[0] if len(p_src) > 0 else None
                 dst_grp = p_dst[0] if len(p_dst) > 0 else None
                 if src_grp and dst_grp:
