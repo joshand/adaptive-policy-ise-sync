@@ -691,6 +691,7 @@ def iseconfig(request):
                 ise_pass = ise_pswd
             else:
                 ise_pass = None
+            ise_enab = True if request.POST.get("intEnabled-" + itemid) else False
             ise_pxen = True if request.POST.get("intPxGrid-" + itemid) else False
             ise_pxip = request.POST.get("intPxIP-" + itemid)
             ise_pxcn = request.POST.get("intPxClName-" + itemid)
@@ -712,7 +713,7 @@ def iseconfig(request):
                 ISEServer.objects.create(description=ise_desc, ipaddress=ise_host, username=ise_user, password=ise_pass,
                                          pxgrid_enable=ise_pxen, pxgrid_ip=ise_pxip, pxgrid_cliname=ise_pxcn,
                                          pxgrid_clicert=crt_pxcc, pxgrid_clikey=crt_pxck, pxgrid_clipw=ise_pxcp,
-                                         pxgrid_isecert=crt_pxsc, force_rebuild=True)
+                                         pxgrid_isecert=crt_pxsc, force_rebuild=True, enabled=ise_enab)
             else:
                 if ise_pass:
                     ISEServer.objects.filter(id=itemid).update(description=ise_desc, ipaddress=ise_host,
@@ -720,14 +721,16 @@ def iseconfig(request):
                                                                pxgrid_enable=ise_pxen, pxgrid_ip=ise_pxip,
                                                                pxgrid_cliname=ise_pxcn, pxgrid_clicert=crt_pxcc,
                                                                pxgrid_clikey=crt_pxck, pxgrid_clipw=ise_pxcp,
-                                                               pxgrid_isecert=crt_pxsc, force_rebuild=ise_rbld)
+                                                               pxgrid_isecert=crt_pxsc, force_rebuild=ise_rbld,
+                                                               enabled=ise_enab)
                 else:
                     ISEServer.objects.filter(id=itemid).update(description=ise_desc, ipaddress=ise_host,
                                                                username=ise_user,
                                                                pxgrid_enable=ise_pxen, pxgrid_ip=ise_pxip,
                                                                pxgrid_cliname=ise_pxcn, pxgrid_clicert=crt_pxcc,
                                                                pxgrid_clikey=crt_pxck, pxgrid_clipw=ise_pxcp,
-                                                               pxgrid_isecert=crt_pxsc, force_rebuild=ise_rbld)
+                                                               pxgrid_isecert=crt_pxsc, force_rebuild=ise_rbld,
+                                                               enabled=ise_enab)
 
     iseservers = ISEServer.objects.all().order_by("description")
     if len(iseservers) == 0:
