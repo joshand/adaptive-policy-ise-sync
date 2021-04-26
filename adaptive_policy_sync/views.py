@@ -732,7 +732,7 @@ def iseconfig(request):
     iseservers = ISEServer.objects.all().order_by("description")
     if len(iseservers) == 0:
         iseservers = [{"id": "new"}]
-    certs = Upload.objects.all().order_by("uploadzip__description", "file")
+    certs = Upload.objects.all().order_by("description", "file")
 
     thisid = request.GET.get("id")
     if thisid:
