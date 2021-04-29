@@ -54,6 +54,7 @@ urlpatterns = [
     path('webhook/', process_webhook),
     path(r'api/v0/', include(router.urls)),
     path('', apsyncviews.dolanding, name='landing'),
+    path('adaptivepolicy/', apsyncviews.dolanding, name='landing'),
     path('login/', apsyncviews.MyLoginView.as_view(), name='login'),
     path('logout/', apsyncviews.MyLogoutView.as_view(), name='logout'),
     re_path(r'^orgs/$', apsyncviews.getmerakiorgs, name='getmerakiorgs'),
