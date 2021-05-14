@@ -1,3 +1,4 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
 
@@ -5,8 +6,8 @@
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://downloads.momentum-ui.com/@momentum-ui/core/css/momentum-ui.min.css" rel="stylesheet">
-    <link href="https://downloads.momentum-ui.com/@momentum-ui/icons/css/momentum-ui-icons.css" rel="stylesheet">
+    <link href="{% static "sync/momentum-ui.min.css" %}" rel="stylesheet">
+    <link href="{% static "sync/momentum-ui-icons.css" %}" rel="stylesheet">
     <title>Adaptive Policy Sync</title>
     <style>
         @media only screen and (min-width: 64.0625em) {
@@ -246,7 +247,7 @@
 </head>
 
 <body>
-    <div id="preloader" style="display: none;"><img src="https://apps.cisco.com/Commerce/staticContent/ngws_Q3FY20_V2/images/preloader.gif" /></div>
+    <div id="preloader" style="display: none;"><img src="{% static "sync/preloader.gif" %}" /></div>
     <div id="app" class="md md--sites">
         <div class="docs-main">
             <header class="md-top-bar md-top-bar--dark" role="navigation">
