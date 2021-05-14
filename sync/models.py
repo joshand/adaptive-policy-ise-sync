@@ -302,7 +302,6 @@ class ISEServer(models.Model):
                                        verbose_name="pxGrid Server Cert (.cer)", related_name='pxgrid_isecert')
     pxgrid_reset = models.BooleanField(default=True, editable=True)
     skip_update = models.BooleanField(default=False)
-    resync_timer = models.IntegerField(default=600)
 
     class Meta:
         verbose_name = "ISE Server"
@@ -713,7 +712,7 @@ class ACL(models.Model):
     def normalize_ise_rules(self, rule_str, mode="compare"):
         if mode == "compare":
             out_txt = ""
-            out_rule = rule_str.replace(" log", "").strip().replace("ip", "any").strip()
+            out_rule = rule_str.replace(" log", "").strip().replace("ip", "any").replace("all", "any").strip()
             l_rule = out_rule.split("\n")
             for l_prt in l_rule:
                 if "remark" not in l_prt:
@@ -1289,17 +1288,30 @@ class TaskQueue(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     description = models.CharField("Task Description", max_length=50, blank=False, null=False)
     function = models.CharField("App Function", max_length=75, blank=False, null=False)
-    data = models.JSONField(blank=True, null=True, default=None)
+    data = models.JSONField(blank=True, null=False, default=dict)
     task_data = models.TextField(blank=True, null=True, default=None)
-    last_update = models.DateTimeField(default=django.utils.timezone.now)
+    last_update = models.DateTimeField(auto_now=True)
     priority = models.IntegerField(default=999)
     state = models.IntegerField(
         choices=STATE_CHOICES,
         default=1,
     )
+    minimum_interval_secs = models.IntegerField(default=0)
+    run_now = models.BooleanField(default=False)
 
     def __str__(self):
         return str(self.priority) + "::" + str(self.state) + "::" + self.description
 
     class Meta:
         ordering = ('-last_update',)
+
+    def get_next_run(self):
+        return self.last_update + datetime.timedelta(seconds=self.minimum_interval_secs)
+
+    def needs_run(self):
+        if django.utils.timezone.now() > self.get_next_run():
+            return True
+        elif self.run_now:
+            return True
+
+        return False
