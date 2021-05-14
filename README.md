@@ -122,12 +122,13 @@ services:
       - DJANGO_SUPERUSER_EMAIL=admin@example.com
       - DJANGO_SUPERUSER_APIKEY=1234567890abcdefghijklmnopqrstuvwxyz1234
     volumes:
-      - /home/alex/adaptivepolicy:/opt/app/adaptive_policy_sync/config
+      - ~/adaptivepolicy:/opt/app/adaptive_policy_sync/config
     ports:
       - 8020:8020
     restart: unless-stopped
-#### Clone the Github repo and run locally<a name="deploy-local"/> ([^ Top](#top))
 ```
+
+#### Clone the Github repo and run locally<a name="deploy-local"/> ([^ Top](#top))
 git clone https://github.com/meraki/adaptive-policy-ise-sync.git
 cd adaptive-policy-ise-sync/
 virtualenv venv --python=python3
