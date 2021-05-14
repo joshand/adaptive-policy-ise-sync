@@ -1,3 +1,4 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
 
@@ -5,8 +6,8 @@
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://downloads.momentum-ui.com/@momentum-ui/core/css/momentum-ui.min.css" rel="stylesheet">
-    <link href="https://downloads.momentum-ui.com/@momentum-ui/icons/css/momentum-ui-icons.css" rel="stylesheet">
+    <link href="{% static "sync/momentum-ui.min.css" %}" rel="stylesheet">
+    <link href="{% static "sync/momentum-ui-icons.css" %}" rel="stylesheet">
     <title>Adaptive Policy Sync</title>
     <script>
         function clearinput(inputid) {
@@ -107,10 +108,10 @@
 </head>
 
 <body>
-    <div id="preloader" style="display: none;"><img src="https://apps.cisco.com/Commerce/staticContent/ngws_Q3FY20_V2/images/preloader.gif" /></div>
+    <div id="preloader" style="display: none;"><img src="{% static "sync/preloader.gif" %}" /></div>
     <div class="md-panel md-panel--form md-panel--full">
         <div class="md-panel__main">
-            <img alt="" class="md-panel__image" src="https://meraki.cisco.com/img/cisco-meraki-logo.png">
+            <img alt="" class="md-panel__image" src="{% static "sync/cisco-meraki-logo.png" %}">
             <div class="md-tab md-tab--pills md-tab--justified" type="pills">
                 <ul class="md-tab__list" role="tab">
                     {% if active == 1 %}
