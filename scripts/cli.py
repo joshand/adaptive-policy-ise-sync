@@ -1,5 +1,5 @@
 from sync.models import Organization, Dashboard, ISEServer, SyncSession
-from django.forms.models import model_to_dict
+# from django.forms.models import model_to_dict
 
 
 def run():
