@@ -124,7 +124,7 @@ services:
     volumes:
       - ~/adaptivepolicy:/opt/app/adaptive_policy_sync/config
     ports:
-      - 8020:8020
+      - 8000:8020
     restart: unless-stopped
 ```
 
