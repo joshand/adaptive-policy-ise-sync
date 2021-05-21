@@ -1,6 +1,6 @@
 @font-face {
   font-family: "momentum-ui-icons";
-  src: url("https://downloads.momentum-ui.com/@momentum-ui/icons/8.13.0/fonts/momentum-ui-icons.woff2?7cb0e81a1baffa2371577eedc0f79ab0") format("woff2"), url("https://downloads.momentum-ui.com/@momentum-ui/icons/8.13.0/fonts/momentum-ui-icons.woff?569447fb03351d69063cad85bc43574d") format("woff");
+  src: url("/static/fonts/momentum-ui-icons.woff2?7cb0e81a1baffa2371577eedc0f79ab0") format("woff2"), url("/static/fonts/momentum-ui-icons.woff?569447fb03351d69063cad85bc43574d") format("woff");
   font-weight: normal;
   font-style: normal;
 }
