@@ -1,25 +1,42 @@
 from sync.models import ISEServer, Upload, UploadZip, Dashboard, Tag, ACL, Policy, SyncSession, Organization, TagData, \
-    ACLData, PolicyData, Task
+    ACLData, PolicyData, Task, DataPipeline, Element, ElementSync, GenericData, GenericType, Generic
 from django.shortcuts import redirect, reverse, render
 from django.contrib.auth import logout
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import views as auth_views
 from .forms import UploadForm
-from scripts.db_backup import backup
+from scripts.db_backup import backup, tech_backup
 from scripts.db_restore import restore
 import os
 from pathlib import Path
 import meraki
 from meraki.exceptions import APIError
 from django.conf import settings
+import json
+import string
+import random
+import uuid
+
+
+def string_generator(size):
+    chars = string.digits + string.ascii_uppercase + string.ascii_lowercase
+    return ''.join(random.choice(chars) for _ in range(size))
+
+
+def string_num_generator(size):
+    chars = string.digits
+    return ''.join(random.choice(chars) for _ in range(size))
 
 
 def startresync(request):
-    ss = SyncSession.objects.all()
-    if len(ss) > 0:
-        ss[0].force_rebuild = True
-        ss[0].save()
-
+    # ss = SyncSession.objects.all()
+    # if len(ss) > 0:
+    #     ss[0].force_rebuild = True
+    #     ss[0].save()
+    ElementSync.objects.filter(enabled=True).update(force_rebuild=True)
+    Element.objects.filter(enabled=True).update(force_rebuild=True)
+    # ISEServer.objects.filter(enabled=True).update(force_rebuild=True)
+    # Organization.objects.filter(enabled=True).update(force_rebuild=True)
     return JsonResponse({}, safe=False)
 
 
@@ -421,6 +438,28 @@ def sgtstatus(request):
     if not request.user.is_authenticated:
         return redirect('/login')
 
+    filter_name = "All"
+    if request.method == 'POST':
+        filter_id = request.POST.get("filter-id-id")
+    else:
+        filter_id = request.GET.get("filter-id-id")
+
+    if filter_id:
+        if filter_id == "0":
+            tags = Tag.objects.all()
+        else:
+            tags = Tag.objects.filter(syncsession=filter_id)
+    else:
+        tags = Tag.objects.all()
+
+    log_filter = [{"id": 0, "description": "All"}]
+    syncs = SyncSession.objects.all()
+    for d in syncs:
+        this_id = str(d.id)
+        if filter_id == this_id:
+            filter_name = d.description
+        log_filter.append({"id": this_id, "description": "Sync: " + d.description})
+
     pk = request.GET.get("id")
     if pk:
         sgts = Tag.objects.filter(id=pk)
@@ -434,9 +473,68 @@ def sgtstatus(request):
             '''
             return render(request, 'home/showsgt.html', {"crumbs": crumbs, "menuopen": 1, "data": sgt})
 
-    sgts = Tag.objects.order_by("-do_sync", "tag_number")
+    # sgts = Tag.objects.order_by("-do_sync", "tag_number")
+    sgts = tags.order_by("-do_sync", "tag_number")
     crumbs = '<li class="current">Status</li><li class="current">SGTs</li>'
-    return render(request, 'home/sgtstatus.html', {"crumbs": crumbs, "menuopen": 1, "data": {"sgt": sgts}})
+    return render(request, 'home/sgtstatus.html', {"crumbs": crumbs, "menuopen": 1, "data": {"sgt": sgts},
+                                                   "filters": log_filter, "filter_id": filter_id,
+                                                   "filter_name": filter_name})
+
+
+def objstatus(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    otype = request.GET.get("type")
+    gt = GenericType.objects.filter(name=otype).first()
+    pk = request.GET.get("id")
+
+    filter_name = "All"
+    if request.method == 'POST':
+        filter_id = request.POST.get("filter-id-id")
+        action = request.POST.get("action")
+        if action == "reset_error":
+            Generic.objects.filter(id=pk).update(err_disabled=False)
+        elif action == "clear_history":
+            Generic.objects.filter(id=pk).update(update_history=None)
+    else:
+        filter_id = request.GET.get("filter-id-id")
+
+    if filter_id:
+        if filter_id == "0":
+            objs = Generic.objects.filter(generictype=gt)
+        else:
+            objs = Generic.objects.filter(generictype=gt).filter(elementsync=filter_id)
+    else:
+        objs = Generic.objects.filter(generictype=gt)
+
+    log_filter = [{"id": 0, "description": "All"}]
+    syncs = ElementSync.objects.all()
+    for d in syncs:
+        this_id = str(d.id)
+        if filter_id == this_id:
+            filter_name = d.description
+        log_filter.append({"id": this_id, "description": "Sync: " + d.description})
+
+    if pk:
+        objs = Generic.objects.filter(id=pk)
+        if len(objs) == 1:
+            obj = objs[0]
+            desc = str(obj)
+            crumbs = '''
+                <li class="current">Status</li>
+                <li><a href="/home/status-obj?type=''' + otype + '''">''' + otype + '''</a></li>
+                <li class="current">''' + desc + '''</li>
+            '''
+            return render(request, 'home/objstatus.html', {"crumbs": crumbs, "menuopen": 1, "id": pk, "data": obj})
+
+    # objs = objs.order_by("-do_sync")
+    # print(objs)
+    crumbs = '<li class="current">Status</li><li class="current">' + otype + '</li>'
+    return render(request, 'home/objstatus.html', {"crumbs": crumbs, "menuopen": 1, "data": {"obj": objs},
+                                                   "filters": log_filter, "filter_id": filter_id,
+                                                   "filter_name": filter_name, "obj_type": gt,
+                                                   "baseurl": "/home/status-obj?type=" + otype})
 
 
 def sgtsave(request):
@@ -465,9 +563,59 @@ def sgtsave(request):
     return redirect("/home/status-sgt")
 
 
+def objsave(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    otype = request.GET.get("type")
+
+    add = (";" + request.POST.get("addlist", ""))[:-1]
+    sub = (";" + request.POST.get("sublist", ""))[:-1]
+    addlist = add.split(";;check-")[1:]
+    sublist = sub.split(";;check-")[1:]
+    objs = Generic.objects.filter(id__in=addlist)
+    for s in objs:
+        s.do_sync = True
+        s.save()
+
+    objs = Generic.objects.filter(id__in=sublist)
+    for s in objs:
+        s.do_sync = False
+        s.save()
+
+    ss = ElementSync.objects.all()
+    if len(ss) > 0:
+        ss[0].force_rebuild = True
+        ss[0].save()
+
+    return redirect("/home/status-obj?type=" + otype)
+
+
 def sgaclstatus(request):
     if not request.user.is_authenticated:
         return redirect('/login')
+
+    filter_name = "All"
+    if request.method == 'POST':
+        filter_id = request.POST.get("filter-id-id")
+    else:
+        filter_id = request.GET.get("filter-id-id")
+
+    if filter_id:
+        if filter_id == "0":
+            acls = ACL.objects.all()
+        else:
+            acls = ACL.objects.filter(syncsession=filter_id)
+    else:
+        acls = ACL.objects.all()
+
+    log_filter = [{"id": 0, "description": "All"}]
+    syncs = SyncSession.objects.all()
+    for d in syncs:
+        this_id = str(d.id)
+        if filter_id == this_id:
+            filter_name = d.description
+        log_filter.append({"id": this_id, "description": "Sync: " + d.description})
 
     pk = request.GET.get("id")
     if pk:
@@ -482,14 +630,39 @@ def sgaclstatus(request):
             '''
             return render(request, 'home/showsgacl.html', {"crumbs": crumbs, "menuopen": 1, "data": sgacl})
 
-    sgacls = ACL.objects.filter(visible=True).order_by("-do_sync")
+    # sgacls = ACL.objects.filter(visible=True).order_by("-do_sync")
+    sgacls = acls.filter(visible=True).order_by("-do_sync")
     crumbs = '<li class="current">Status</li><li class="current">ACLs</li>'
-    return render(request, 'home/sgaclstatus.html', {"crumbs": crumbs, "menuopen": 1, "data": {"sgacl": sgacls}})
+    return render(request, 'home/sgaclstatus.html', {"crumbs": crumbs, "menuopen": 1, "data": {"sgacl": sgacls},
+                                                     "filters": log_filter, "filter_id": filter_id,
+                                                     "filter_name": filter_name})
 
 
 def policystatus(request):
     if not request.user.is_authenticated:
         return redirect('/login')
+
+    filter_name = "All"
+    if request.method == 'POST':
+        filter_id = request.POST.get("filter-id-id")
+    else:
+        filter_id = request.GET.get("filter-id-id")
+
+    if filter_id:
+        if filter_id == "0":
+            pols = Policy.objects.all()
+        else:
+            pols = Policy.objects.filter(syncsession=filter_id)
+    else:
+        pols = Policy.objects.all()
+
+    log_filter = [{"id": 0, "description": "All"}]
+    syncs = SyncSession.objects.all()
+    for d in syncs:
+        this_id = str(d.id)
+        if filter_id == this_id:
+            filter_name = d.description
+        log_filter.append({"id": this_id, "description": "Sync: " + d.description})
 
     pk = request.GET.get("id")
     if pk:
@@ -504,9 +677,11 @@ def policystatus(request):
             '''
             return render(request, 'home/showpolicy.html', {"crumbs": crumbs, "menuopen": 1, "data": policy})
 
-    policies = Policy.objects.order_by("-do_sync")
+    policies = pols.order_by("-do_sync")
     crumbs = '<li class="current">Status</li><li class="current">Policies</li>'
-    return render(request, 'home/policystatus.html', {"crumbs": crumbs, "menuopen": 1, "data": {"policy": policies}})
+    return render(request, 'home/policystatus.html', {"crumbs": crumbs, "menuopen": 1, "data": {"policy": policies},
+                                                      "filters": log_filter, "filter_id": filter_id,
+                                                      "filter_name": filter_name})
 
 
 def sgtdata(request):
@@ -585,6 +760,9 @@ def certconfig(request):
     uploadzip = UploadZip.objects.all()
     upload = Upload.objects.all()
 
+    for u in uploadzip:
+        print(u.upload_set.all())
+
     crumbs = '<li class="current">Configuration</li><li class="current">Certificates</li>'
     return render(request, 'home/certconfig.html', {"crumbs": crumbs, "menuopen": 2,
                                                     "data": {"zip": uploadzip, "file": upload}})
@@ -634,28 +812,42 @@ def backuprestore(request):
             os.remove(a_list[1])
             msg = "Database Backup Deleted"
         elif action == "RESET_ALL":
+            # ISEServer.objects.all().delete()
+            # Dashboard.objects.all().delete()
+            # Organization.objects.all().delete()
+            # SyncSession.objects.all().delete()
+            # Task.objects.all().delete()
+            # UploadZip.objects.all().delete()
+            # Tag.objects.all().delete()
+            # ACL.objects.all().delete()
+            # Policy.objects.all().delete()
+            # TagData.objects.all().delete()
+            # ACLData.objects.all().delete()
+            # PolicyData.objects.all().delete()
             ISEServer.objects.all().delete()
             Dashboard.objects.all().delete()
             Organization.objects.all().delete()
-            SyncSession.objects.all().delete()
+            Element.objects.all().delete()
+            ElementSync.objects.all().delete()
             Task.objects.all().delete()
             UploadZip.objects.all().delete()
-            Tag.objects.all().delete()
-            ACL.objects.all().delete()
-            Policy.objects.all().delete()
-            TagData.objects.all().delete()
-            ACLData.objects.all().delete()
-            PolicyData.objects.all().delete()
+            Upload.objects.all().delete()
+            Generic.objects.all().delete()
+            GenericData.objects.all().delete()
             msg = "Database Cleared"
         elif action == "RESET_OBJ":
+            # Task.objects.all().delete()
+            # Tag.objects.all().delete()
+            # ACL.objects.all().delete()
+            # Policy.objects.all().delete()
+            # TagData.objects.all().delete()
+            # ACLData.objects.all().delete()
+            # PolicyData.objects.all().delete()
+            # SyncSession.objects.all().update(sync_enabled=False)
             Task.objects.all().delete()
-            Tag.objects.all().delete()
-            ACL.objects.all().delete()
-            Policy.objects.all().delete()
-            TagData.objects.all().delete()
-            ACLData.objects.all().delete()
-            PolicyData.objects.all().delete()
-            SyncSession.objects.all().update(sync_enabled=False)
+            ElementSync.objects.all().update(enabled=False)
+            Generic.objects.all().delete()
+            GenericData.objects.all().delete()
             msg = "Synced Objects Cleared"
 
     mypath = os.path.join(".", "config")
@@ -732,15 +924,20 @@ def iseconfig(request):
                                                                pxgrid_isecert=crt_pxsc, force_rebuild=ise_rbld,
                                                                enabled=ise_enab)
 
+    thisact = request.GET.get("action")
+    thisid = request.GET.get("id")
+    if thisid and thisact and thisact.upper() == "DEL":
+        ISEServer.objects.filter(id=thisid).delete()
+        thisid = None
+
     iseservers = ISEServer.objects.all().order_by("description")
-    if len(iseservers) == 0:
-        iseservers = [{"id": "new"}]
+    # if len(iseservers) == 0:
+    #     iseservers = [{"id": "new"}]
     certs = Upload.objects.all().order_by("description", "file")
 
-    thisid = request.GET.get("id")
-    if thisid:
+    if thisid and (not thisact or (thisact and thisact.upper() != "DEL")):
         if thisid == "new":
-            thisserver = None
+            thisserver = {"id": "new"}
             serverdesc = "(New)"
         else:
             thisserver = iseservers.filter(id=thisid).first()
@@ -804,10 +1001,18 @@ def merakiconfig(request):
                                                                    apikey=dash_apik)
                     else:
                         Dashboard.objects.filter(id=itemid).update(description=dash_desc, baseurl=dash_aurl)
-    else:
-        orgid = request.GET.get("id")
-        if request.GET.get("action") == "delorg" and orgid:
-            Organization.objects.filter(id=orgid).delete()
+
+    thisid = request.GET.get("id")
+    thisact = request.GET.get("action")
+    if thisact and thisact.upper() == "DELORG" and thisid:
+        Organization.objects.filter(id=thisid).delete()
+    if thisact and thisact.upper() == "DEL" and thisid:
+        db = Dashboard.objects.filter(id=thisid).first()
+        orgs = db.organization.all()
+        for o in orgs:
+            o.delete()
+        db.delete()
+        thisid = None
 
     dashboards = Dashboard.objects.all()
     for dashboard in dashboards:
@@ -821,11 +1026,28 @@ def merakiconfig(request):
             except APIError:
                 dashboard.apikey = ""
                 dashboard.save()
-    if len(dashboards) == 0:
-        dashboards = [{"id": "new"}]
+    # if len(dashboards) == 0:
+    #     dashboards = [{"id": "new"}]
 
-    crumbs = '<li class="current">Configuration</li><li class="current">Meraki Dashboard</li>'
-    return render(request, 'home/merakiconfig.html', {"crumbs": crumbs, "menuopen": 2, "data": dashboards})
+    if thisid and (not thisact or (thisact and thisact.upper() != "DEL")):
+        if thisid == "new":
+            thisdashboard = {"id": "new"}
+            dashboarddesc = "(New)"
+        else:
+            thisdashboard = dashboards.filter(id=thisid).first()
+            dashboarddesc = thisdashboard.description
+
+        crumbs = '''
+            <li class="current">Configuration</li>
+            <li><a href="/home/config-meraki">Meraki Accounts</a></li>
+            <li class="current">''' + dashboarddesc + '''</li>
+        '''
+    else:
+        thisdashboard = None
+        crumbs = '<li class="current">Configuration</li><li class="current">Meraki Dashboard</li>'
+
+    return render(request, 'home/merakiconfig.html', {"crumbs": crumbs, "menuopen": 2, "i": thisdashboard,
+                                                      "dashboard_id": thisid, "dashboards": dashboards})
 
 
 def syncconfig(request):
@@ -834,44 +1056,179 @@ def syncconfig(request):
 
     if request.method == 'POST':
         postvars = request.POST
+        print(postvars)
         idlist = []
+        dst = {"ise": [], "org": []}
         for v in postvars:
             if "intDesc-" in v:
                 vid = v.replace("intDesc-", "")
                 idlist.append(vid)
+            if "dstIse-" in v:
+                did = v.replace("dstIse-", "")
+                dst["ise"].append(uuid.UUID(did))
+            if "dstOrg-" in v:
+                did = v.replace("dstOrg-", "")
+                dst["org"].append(uuid.UUID(did))
 
         for itemid in idlist:
             sync_desc = request.POST.get("intDesc-" + itemid)
+            # source
             sync_isvr = request.POST.get("iseserver-id-" + itemid)
             sync_dash = request.POST.get("dashboard-id-" + itemid)
-            opt_sorc = request.POST.get("src-" + itemid)
-            sync_sorc = True if opt_sorc == "ise" else False
             opt_rbld = request.POST.get("intRebuild-" + itemid)
             sync_rbld = True if opt_rbld else False
             opt_sync = request.POST.get("intSync-" + itemid)
             sync_sync = True if opt_sync else False
             opt_aply = request.POST.get("intApply-" + itemid)
             sync_aply = True if opt_aply else False
+            opt_rev = request.POST.get("intReverse-" + itemid)
+            sync_rev = True if opt_rev else False
             sync_itvl = request.POST.get("intInterval-" + itemid)
             if itemid == "new":
-                SyncSession.objects.create(description=sync_desc, iseserver=sync_isvr, dashboard=sync_dash,
-                                           ise_source=sync_sorc, force_rebuild=sync_rbld, sync_enabled=sync_sync,
-                                           apply_changes=sync_aply, sync_interval=sync_itvl)
+                if sync_isvr:
+                    ss = SyncSession.objects.create(description=sync_desc, src_iseserver_id=sync_isvr,
+                                                    force_rebuild=sync_rbld, enabled=sync_sync,
+                                                    apply_changes=sync_aply, sync_interval=sync_itvl,
+                                                    reverse_sync=sync_rev)
+                else:
+                    ss = SyncSession.objects.create(description=sync_desc, src_organization_id=sync_dash,
+                                                    force_rebuild=sync_rbld, enabled=sync_sync,
+                                                    apply_changes=sync_aply, sync_interval=sync_itvl,
+                                                    reverse_sync=sync_rev)
             else:
-                SyncSession.objects.filter(id=itemid).update(description=sync_desc, iseserver=sync_isvr,
-                                                             dashboard=sync_dash, ise_source=sync_sorc,
-                                                             force_rebuild=sync_rbld, sync_enabled=sync_sync,
-                                                             apply_changes=sync_aply, sync_interval=sync_itvl)
+                if sync_isvr:
+                    sy_s = SyncSession.objects.filter(id=itemid)
+                    sy_s.update(description=sync_desc, src_iseserver_id=sync_isvr, force_rebuild=sync_rbld,
+                                enabled=sync_sync, apply_changes=sync_aply, sync_interval=sync_itvl,
+                                reverse_sync=sync_rev)
+
+                else:
+                    sy_s = SyncSession.objects.filter(id=itemid)
+                    sy_s.update(description=sync_desc, src_organization_id=sync_dash, force_rebuild=sync_rbld,
+                                enabled=sync_sync, apply_changes=sync_aply, sync_interval=sync_itvl,
+                                reverse_sync=sync_rev)
+                ss = sy_s.first()
+
+            if len(dst["ise"]) > 0:
+                ss.dst_iseserver.clear()
+                ss.dst_iseserver.add(*dst["ise"])
+            if len(dst["org"]) > 0:
+                ss.dst_organization.clear()
+                ss.dst_organization.add(*dst["org"])
+            ss.save()
+
+    thisid = request.GET.get("id")
+    thisact = request.GET.get("action")
+    if thisact and thisact.upper() == "DEL" and thisid:
+        SyncSession.objects.filter(id=thisid).delete()
+        thisid = None
 
     syncs = SyncSession.objects.all()
     if len(syncs) == 0:
         syncs = [{"id": "new"}]
     iseservers = ISEServer.objects.all()
-    dashboards = Dashboard.objects.all()
+    # dashboards = Dashboard.objects.all()
+    orgs = Organization.objects.all()
 
-    crumbs = '<li class="current">Configuration</li><li class="current">Synchronization</li>'
+    if thisid and (not thisact or (thisact and thisact.upper() != "DEL")):
+        if thisid == "new":
+            thissync = {"id": "new"}
+            syncdesc = "(New)"
+        else:
+            thissync = syncs.filter(id=thisid).first()
+            syncdesc = thissync.description
+
+        crumbs = '''
+            <li class="current">Configuration</li>
+            <li><a href="/home/config-sync">Synchronization</a></li>
+            <li class="current">''' + syncdesc + '''</li>
+        '''
+    else:
+        thissync = None
+        crumbs = '<li class="current">Configuration</li><li class="current">Synchronization</li>'
+
     return render(request, 'home/syncconfig.html', {"crumbs": crumbs, "menuopen": 2, "data": syncs,
-                                                    "iseservers": iseservers, "dashboards": dashboards})
+                                                    "iseservers": iseservers, "organizations": orgs,
+                                                    "i": thissync, "sync_id": thisid})
+
+
+def elmsyncconfig(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    if request.method == 'POST':
+        postvars = request.POST
+        idlist = []
+        dst = {"elm": []}
+        for v in postvars:
+            if "intDesc-" in v:
+                vid = v.replace("intDesc-", "")
+                idlist.append(vid)
+            if "dstElm-" in v:
+                did = v.replace("dstElm-", "")
+                dst["elm"].append(uuid.UUID(did))
+
+        for itemid in idlist:
+            sync_desc = request.POST.get("intDesc-" + itemid)
+            # source
+            sync_element = request.POST.get("element-id-" + itemid)
+            opt_rbld = request.POST.get("intRebuild-" + itemid)
+            sync_rbld = True if opt_rbld else False
+            opt_sync = request.POST.get("intSync-" + itemid)
+            sync_sync = True if opt_sync else False
+            opt_aply = request.POST.get("intApply-" + itemid)
+            sync_aply = True if opt_aply else False
+            opt_rev = request.POST.get("intReverse-" + itemid)
+            sync_rev = True if opt_rev else False
+            sync_itvl = request.POST.get("intInterval-" + itemid)
+            if itemid == "new":
+                ss = ElementSync.objects.create(description=sync_desc, src_element_id=sync_element,
+                                                force_rebuild=sync_rbld, enabled=sync_sync,
+                                                apply_changes=sync_aply, sync_interval=sync_itvl,
+                                                reverse_sync=sync_rev)
+            else:
+                sy_s = ElementSync.objects.filter(id=itemid)
+                sy_s.update(description=sync_desc, src_element_id=sync_element, force_rebuild=sync_rbld,
+                            enabled=sync_sync, apply_changes=sync_aply, sync_interval=sync_itvl,
+                            reverse_sync=sync_rev)
+                ss = sy_s.first()
+
+            if len(dst["elm"]) > 0:
+                ss.dst_element.clear()
+                ss.dst_element.add(*dst["elm"])
+            ss.save()
+
+    thisid = request.GET.get("id")
+    thisact = request.GET.get("action")
+    if thisact and thisact.upper() == "DEL" and thisid:
+        ElementSync.objects.filter(id=thisid).delete()
+        thisid = None
+
+    syncs = ElementSync.objects.all()
+    # if len(syncs) == 0:
+    #     syncs = [{"id": "new"}]
+    elements = Element.objects.all().order_by('elementtype', 'iseserver__description',
+                                              'organization__dashboard__description')
+
+    if thisid and (not thisact or (thisact and thisact.upper() != "DEL")):
+        if thisid == "new":
+            thissync = {"id": "new"}
+            syncdesc = "(New)"
+        else:
+            thissync = syncs.filter(id=thisid).first()
+            syncdesc = thissync.description
+
+        crumbs = '''
+            <li class="current">Configuration</li>
+            <li><a href="/home/config-elm-sync">Synchronization</a></li>
+            <li class="current">''' + syncdesc + '''</li>
+        '''
+    else:
+        thissync = None
+        crumbs = '<li class="current">Configuration</li><li class="current">Synchronization</li>'
+
+    return render(request, 'home/elmsyncconfig.html', {"crumbs": crumbs, "menuopen": 2, "data": syncs,
+                                                       "elements": elements, "i": thissync, "sync_id": thisid})
 
 
 class MyLoginView(auth_views.LoginView):
@@ -889,3 +1246,399 @@ class MyLogoutView(auth_views.LogoutView):
     def dispatch(self, request, *args, **kwargs):
         logout(request)
         return redirect('/')
+
+
+def trbl_data(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    # changing this from .filter to .exclude will switch to generic element mapping
+    dps = DataPipeline.objects.exclude(element=None)
+    d_arr = {}
+    default_dict = {"s1": None, "s2": None, "s3": None, "s4": None, "obj_id": None}
+    for d in dps:
+        elem_str = None
+        if d.iseserver:
+            elem_str = str(d.iseserver)
+            if str(d.iseserver) not in d_arr:
+                d_arr[elem_str] = {**default_dict}
+        elif d.organization:
+            elem_str = str(d.organization)
+            if str(d.organization) not in d_arr:
+                d_arr[elem_str] = {**default_dict}
+        elif d.element:
+            elem_str = str(d.element)
+            if str(d.element) not in d_arr:
+                d_arr[elem_str] = {**default_dict}
+
+        if elem_str:
+            d_arr[elem_str]["s" + str(d.stage)] = d
+            if d.iseserver:
+                d_arr[elem_str]["obj_id"] = "ise~" + str(d.iseserver.id)
+            elif d.organization:
+                d_arr[elem_str]["obj_id"] = "org~" + str(d.organization.id)
+            elif d.element:
+                d_arr[elem_str]["obj_id"] = "elm~" + str(d.element.id)
+
+    d_list = []
+    for element in d_arr:
+        d_list.append({"element": element, "obj_id": d_arr[element]["obj_id"], "stages": d_arr[element]})
+
+    # Manually Add elements that haven't been touched by the pipeline yet
+    elements = {"ise": [], "org": [], "elm": []}
+    for d in DataPipeline.objects.all():
+        if d.iseserver:
+            elements["ise"].append(d.iseserver.id)
+        elif d.organization:
+            elements["org"].append(d.organization.id)
+        elif d.element:
+            elements["elm"].append(d.element.id)
+
+    # non_i = ISEServer.objects.exclude(id__in=elements["ise"])
+    # non_o = Organization.objects.exclude(id__in=elements["org"])
+    non_e = Element.objects.exclude(id__in=elements["elm"])
+
+    # for i in non_i:
+    #     d_list.append({"element": str(i), "obj_id": "ise~" + str(i.id), "stages": default_dict})
+    # for i in non_o:
+    #     d_list.append({"element": str(i), "obj_id": "org~" + str(i.id), "stages": default_dict})
+    for i in non_e:
+        d_list.append({"element": str(i), "obj_id": "elm~" + str(i.id), "stages": default_dict})
+
+    crumbs = '<li class="current">Troubleshooting</li><li class="current">Data Pipeline</li>'
+    return render(request, 'home/pipeline.html', {"crumbs": crumbs, "menuopen": 3, "data": d_list})
+
+
+def trbl_logs(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    crumbs = '<li class="current">Troubleshooting</li><li class="current">Logs</li>'
+
+    filter_name = "All"
+    if request.method == 'POST':
+        filter_id = request.POST.get("filter-id-id")
+    else:
+        filter_id = request.GET.get("filter-id-id")
+
+    if filter_id:
+        if filter_id == "0":
+            tasks = Task.objects.all()
+        else:
+            filter_list = filter_id.split("~")
+            if filter_list[0] == "ise":
+                tasks = Task.objects.filter(iseserver=filter_list[1])
+            elif filter_list[0] == "org":
+                tasks = Task.objects.filter(organization=filter_list[1])
+            elif filter_list[0] == "elm":
+                tasks = Task.objects.filter(element=filter_list[1])
+            elif filter_list[0] == "els":
+                tasks = Task.objects.filter(elementsync=filter_list[1])
+            else:
+                tasks = Task.objects.filter(syncsession=filter_list[1])
+    else:
+        tasks = Task.objects.all()
+
+    if not request.method == "POST":
+        log_id = request.GET.get("id")
+        action = request.GET.get("action")
+        if action and action.upper() == "DEL":
+            Task.objects.filter(id=log_id).delete()
+    log_filter = [{"id": 0, "description": "All"}]
+    # iseservers = ISEServer.objects.all()
+    # for d in iseservers:
+    #     this_id = "ise~" + str(d.id)
+    #     if filter_id == this_id:
+    #         filter_name = d.description
+    #     log_filter.append({"id": this_id, "description": "ISE: " + d.description})
+    # organizations = Organization.objects.all()
+    # for d in organizations:
+    #     this_id = "org~" + str(d.id)
+    #     if filter_id == this_id:
+    #         filter_name = d.dashboard_set.first().description
+    #     log_filter.append({"id": this_id, "description": "Meraki: " + d.dashboard_set.first().description})
+    # syncs = SyncSession.objects.all()
+    # for d in syncs:
+    #     this_id = "sss~" + str(d.id)
+    #     if filter_id == this_id:
+    #         filter_name = d.description
+    #     log_filter.append({"id": this_id, "description": "Sync: " + d.description})
+
+    # This adds Elements to the filter list. Remove everything else to switch to Generic Element
+    elements = Element.objects.all()
+    for d in elements:
+        this_id = "elm~" + str(d.id)
+        if filter_id == this_id:
+            filter_name = "Element " + str(d)
+        log_filter.append({"id": this_id, "description": "Element : " + str(d)})
+    syncs = ElementSync.objects.all()
+    for d in syncs:
+        this_id = "els~" + str(d.id)
+        if filter_id == this_id:
+            filter_name = d.description
+        log_filter.append({"id": this_id, "description": "Sync: " + d.description})
+
+    return render(request, 'home/logs.html', {"crumbs": crumbs, "menuopen": 3, "data": tasks,
+                                              "filters": log_filter, "filter_id": filter_id,
+                                              "filter_name": filter_name})
+
+
+def trbl_load(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    crumbs = '<li class="current">Troubleshooting</li><li class="current">Manual Dataset</li>'
+
+    if request.method == 'POST':
+        data = request.POST.get("config-data")
+        new_data = json.loads(data.replace("\r\n", "").replace("\r", "").replace("\n", ""))
+        if "sgts" in new_data and "sgacls" in new_data and "sgpolicies" in new_data:
+            # this is an ISE dataset
+            ISEServer.objects.create(description="ise_" + string_generator(8), ipaddress="127.0.0.1",
+                                     raw_data=new_data, manual_dataset=True, enabled=False)
+        else:
+            this_oid = string_num_generator(20)
+            org = Organization.objects.create(orgid=this_oid, manual_dataset=True,
+                                              raw_data=new_data)
+            o_data = [{"id": this_oid, "name": "Imported Org Data", "url": "https://dashboard.meraki.com/"}]
+            db = Dashboard.objects.create(description="dash_" + string_generator(8), apikey="",
+                                          enabled=False, raw_data=o_data)
+            db.organization.add(org)
+            db.save()
+    else:
+        dataset_id = request.GET.get("id")
+        action = request.GET.get("action")
+        if action and action.upper() == "DEL":
+            dataset_list = dataset_id.split("~")
+            if dataset_list[0] == "ise":
+                ISEServer.objects.filter(id=dataset_list[1]).delete()
+            else:
+                org = Organization.objects.filter(id=dataset_list[1]).first()
+                db = org.dashboard_set.first()
+                db.delete()
+                org.delete()
+
+    i = ISEServer.objects.filter(manual_dataset=True)
+    o = Organization.objects.filter(manual_dataset=True)
+    datasets = {"ise": i, "org": o}
+
+    return render(request, 'home/dataset.html', {"crumbs": crumbs, "menuopen": 3, "data": datasets})
+
+
+def trbl_tech(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    msg = None
+
+    if request.method == 'POST':
+        action = request.POST.get("action").upper()
+        if action == "RESET_ALL":
+            ISEServer.objects.all().delete()
+            Dashboard.objects.all().delete()
+            Organization.objects.all().delete()
+            Element.objects.all().delete()
+            ElementSync.objects.all().delete()
+            Task.objects.all().delete()
+            UploadZip.objects.all().delete()
+            Upload.objects.all().delete()
+            Generic.objects.all().delete()
+            GenericData.objects.all().delete()
+            msg = "Database Cleared"
+        elif action == "RESET_OBJ":
+            Task.objects.all().delete()
+            ElementSync.objects.all().update(enabled=False)
+            Generic.objects.all().delete()
+            GenericData.objects.all().delete()
+            msg = "Synced Objects Cleared"
+    else:
+        tech_act = request.GET.get("action")
+        if tech_act == "file":
+            filecontent = tech_backup()
+            response = HttpResponse(filecontent, content_type="application/zip")
+            response['Content-Disposition'] = 'inline; filename=tech_support.zip'
+            return response
+
+    crumbs = '<li class="current">Troubleshooting</li><li class="current">Technical Support</li>'
+    return render(request, 'home/support.html', {"crumbs": crumbs, "menuopen": 3, "msg": msg})
+
+
+def trbl_admin(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    return redirect('/admin')
+
+
+def update_objects(data, tag_dict, acl_dict, pol_dict):
+    if type(data) == ISEServer:
+        for obj in TagData.objects.filter(iseserver=data):
+            d = obj.get_data("value")
+            if d not in tag_dict:
+                tag_dict[d] = []
+            tag_dict[d].append(obj)
+        for obj in ACLData.objects.filter(iseserver=data):
+            d = obj.get_data("cleaned_name")
+            if d not in acl_dict:
+                acl_dict[d] = []
+            acl_dict[d].append(obj)
+        for obj in PolicyData.objects.filter(iseserver=data):
+            d = obj.get_data("mapping")
+            if d not in pol_dict:
+                pol_dict[d] = []
+            pol_dict[d].append(obj)
+    elif type(data) == Organization:
+        for obj in TagData.objects.filter(organization=data):
+            d = obj.get_data("value")
+            if d not in tag_dict:
+                tag_dict[d] = []
+            tag_dict[d].append(obj)
+        for obj in ACLData.objects.filter(organization=data):
+            d = obj.get_data("cleaned_name")
+            if d not in acl_dict:
+                acl_dict[d] = []
+            acl_dict[d].append(obj)
+        for obj in PolicyData.objects.filter(organization=data):
+            d = obj.get_data("mapping")
+            if d not in pol_dict:
+                pol_dict[d] = []
+            pol_dict[d].append(obj)
+
+
+def syncstatus(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    sync_id = request.GET.get("id")
+    if not sync_id:
+        return redirect("/home")
+
+    sync = SyncSession.objects.filter(id=sync_id).first()
+    managers = {"src": {}, "dst": [], "all": [], "sync": sync}
+    tag_dict = {}
+    acl_dict = {}
+    pol_dict = {}
+    if sync.src_iseserver:
+        src = sync.src_iseserver
+        update_objects(src, tag_dict, acl_dict, pol_dict)
+        managers["src"] = src
+        managers["all"].append(src)
+        # managers["dst"].append(sync.src_iseserver)
+        # managers["all"].append(sync.src_iseserver)
+    else:
+        src = sync.src_organization
+        update_objects(src, tag_dict, acl_dict, pol_dict)
+        managers["src"] = src
+        managers["all"].append(src)
+        # managers["dst"].append(sync.src_organization)
+        # managers["all"].append(sync.src_iseserver)
+
+    for x in sync.dst_iseserver.all():
+        update_objects(x, tag_dict, acl_dict, pol_dict)
+        managers["dst"].append(x)
+        managers["all"].append(x)
+
+    for x in sync.dst_organization.all():
+        update_objects(x, tag_dict, acl_dict, pol_dict)
+        managers["dst"].append(x)
+        managers["all"].append(x)
+
+    # print(managers)
+    # crumbs = '<li class="current">Home</li><li class="current">Sync Status</li>'
+    crumbs = '''
+        <li class="current">Configuration</li>
+        <li><a href="/home/config-sync">Synchronization</a></li>
+        <li class="current">''' + sync.description + '''</li>
+    '''
+    return render(request, 'home/syncstatus.html', {"crumbs": crumbs, "menuopen": 2, "data":
+                                                    {"tags": dict(sorted(tag_dict.items())),
+                                                     "acls": dict(sorted(acl_dict.items())),
+                                                     "policies": dict(sorted(pol_dict.items())),
+                                                     "elements": managers}})
+
+
+def update_elm_objects(data, obj_dict):
+    for ty in GenericType.objects.all():
+        tmp_dict = obj_dict.get(str(ty), {})
+        for obj in GenericData.objects.filter(element=data).filter(generictype=ty):
+            fld = obj.generictype.significant_name_key
+            d = obj.get_data(fld, safe=True)
+            # print(fld, d)
+            if d not in tmp_dict:
+                tmp_dict[d] = []
+            tmp_dict[d].append(obj)
+
+        obj_dict[str(ty)] = dict(sorted(tmp_dict.items()))
+
+
+def elmsyncstatus(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    sync_id = request.GET.get("id")
+    if not sync_id:
+        return redirect("/home")
+
+    sync = ElementSync.objects.filter(id=sync_id).first()
+    managers = {"src": {}, "dst": [], "all": [], "sync": sync}
+    obj_dict = {}
+    if sync.src_element:
+        src = sync.src_element
+        update_elm_objects(src, obj_dict)
+        managers["src"] = src
+        managers["all"].append(src)
+
+    for x in sync.dst_element.all():
+        update_elm_objects(x, obj_dict)
+        managers["dst"].append(x)
+        managers["all"].append(x)
+
+    # print(managers)
+    # crumbs = '<li class="current">Home</li><li class="current">Sync Status</li>'
+    crumbs = '''
+        <li class="current">Configuration</li>
+        <li><a href="/home/config-elm-sync">Synchronization</a></li>
+        <li class="current">''' + sync.description + '''</li>
+    '''
+    # print(obj_dict)
+    # print(managers)
+    return render(request, 'home/elmsyncstatus.html', {"crumbs": crumbs, "menuopen": 2, "data":
+                                                       {"objects": obj_dict,
+                                                        "elements": managers}})
+
+
+def objdata(request):
+    if not request.user.is_authenticated:
+        return redirect('/login')
+
+    objtype = request.GET.get("type")
+    pk = request.GET.get("id")
+    if pk:
+        objs = GenericData.objects.filter(id=pk)
+        gen = objs.first().generic
+        if gen:
+            gen_id = str(gen.id)
+            gen_desc = str(gen)
+        else:
+            gen_id = None
+            gen_desc = None
+        if len(objs) == 1:
+            obj = objs[0]
+            desc = str(obj)
+            if gen_id:
+                crumbs = '''
+                    <li class="current">Status</li>
+                    <li><a href="/home/status-obj?type=''' + objtype + '''">''' + objtype + '''</a></li>
+                    <li><a href="/home/status-obj?type=''' + objtype + '''&id=''' + gen_id + '''">''' + gen_desc + '''</a></li>
+                    <li class="current">''' + desc + '''</li>
+                '''
+            else:
+                crumbs = '''
+                    <li class="current">Status</li>
+                    <li><a href="/home/status-obj?type=''' + objtype + '''">''' + objtype + '''</a></li>
+                    <li class="current">''' + desc + '''</li>
+                '''
+
+            return render(request, 'home/showobjdata.html', {"crumbs": crumbs, "menuopen": 1, "data": obj})
+
+    return redirect("/home/status-obj?type=" + objtype + "&id=" + pk)

@@ -4,6 +4,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.shortcuts import CompleteStyle
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.completion import Completion, Completer
+from prompt_toolkit.history import FileHistory
 from scripts.cli_command_list import context
 import scripts.cli_command_exec
 
@@ -169,7 +170,11 @@ def parse_input(strinput, curcontext, gethelp=False):
     """
     modifiers = ["begin", "include", "exclude", "section"]
     basic_cmd_list = strinput.split(" ")
-    cmd_list = shlex.split(strinput)
+    try:
+        cmd_list = shlex.split(strinput)
+    except Exception:
+        return "% Invalid input detected"
+
     temp_cmd = join_contexts(curcontext)
     add_modifiers = False
     mod_text = []
@@ -256,6 +261,9 @@ def parse_input(strinput, curcontext, gethelp=False):
                     if x.get("special") == "hidden":
                         continue
                     out_help.append(["", outcmd, "", x.get("help", "no help available")])
+                    if "lookup" in x:
+                        exec_ret = scripts.cli_command_exec.lookup_func(x["lookup"])
+
             msg += "?\n" + scripts.cli_command_exec.format_data(out_help)
         else:
             if add_modifiers:
@@ -349,7 +357,7 @@ def main():
         print("\n" + contextchain[len(contextchain)-1]["prompt"] + " " + session.app.current_buffer.text, end="")
 
     print('Welcome to the AdP Sync shell. Type help or ? to list commands.\n')
-    session = PromptSession()
+    session = PromptSession(history=FileHistory('.adp_cli_history'))
     while True:
         try:
             n = NestedCompleter(words_dic=join_contexts(contextchain[len(contextchain)-1]["contextname"]))

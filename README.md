@@ -70,6 +70,7 @@
 2) Create an [ERS Admin](https://community.cisco.com/t5/security-documents/ise-ers-api-examples/ta-p/3622623#toc-hId-1863715928) user account for ISE ERS access.
 
 ##### Cisco ISE pxGrid Support<a name="cisco-ise-pxgrid"/> ([^ Top](#top))
+_*Note: When using pxGrid, you should only run the container with MySQL (using docker-compose). The built-in SQLite database does not support concurrent writes, which are impossible to avoid with the pxGrid mechanism.*_
 1) If you plan to integrate with pxGrid for ISE Push-Notifications, you will need to create a new pxGrid Certificate for your application.
     - Navigate to ISE Admin GUI via any web browser and login
     - Navigate to Administration -> pxGrid Services

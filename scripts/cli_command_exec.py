@@ -3,9 +3,10 @@
 # import copy
 import json
 # from django.core import serializers
-from sync.models import Organization, ISEServer, Dashboard, SyncSession, TagData, ACLData, PolicyData, Upload
+from sync.models import Organization, ISEServer, Dashboard, ElementSync, GenericData, Upload, Element
 import shlex
 from django.forms.models import model_to_dict
+import requests
 
 
 def show_enabled(e_stat):
@@ -118,7 +119,7 @@ def exec_get_config(data, clitext, contextchain):
         mask_pw = True
     iseservers = ISEServer.objects.all()
     dashboards = Dashboard.objects.all()
-    syncsessions = SyncSession.objects.all()
+    syncsessions = ElementSync.objects.all()
     out_config = "!\n"
     for e in iseservers:
         out_config += "ise-server \"" + str(e.description) + "\"\n"
@@ -150,19 +151,20 @@ def exec_get_config(data, clitext, contextchain):
         out_config += "!\n"
     for e in syncsessions:
         out_config += "sync-session \"" + str(e.description) + "\"\n"
-        if e.src_iseserver:
-            out_config += " source ise-server " + str(e.src_iseserver.description) + "\n"
-        elif e.src_organization:
-            out_config += " source organization " + str(e.src_organization.orgid) + "\n"
+        if e.src_element and e.src_element.iseserver:
+            out_config += " source ise-server \"" + str(e.src_element.iseserver.description) + "\"\n"
+        elif e.src_element and e.src_element.organization:
+            out_config += " source organization " + str(e.src_element.organization.orgid) + "\n"
         else:
             out_config += " no source\n"
         out_config += " destinations\n"
-        for o in e.dst_iseserver.all():
-            out_config += "  ise-server " + str(o.description) + "\n"
-        for o in e.dst_organization.all():
-            out_config += "  organization " + str(o.orgid) + "\n"
+        for o in e.dst_element.all():
+            if o.iseserver:
+                out_config += "  ise-server \"" + str(o.iseserver.description) + "\"\n"
+            elif o.organization:
+                out_config += "  organization " + str(o.organization.orgid) + "\n"
         out_config += " !\n"
-        out_config += (" no " if e.sync_enabled else " ") + "shutdown\n"
+        out_config += (" no " if e.enabled else " ") + "shutdown\n"
         out_config += (" no " if not e.apply_changes else " ") + "push-changes\n"
         out_config += (" no " if not e.reverse_sync else " ") + "reverse-sync\n"
 
@@ -173,16 +175,16 @@ def render_data(source, element, lookup, excluded_fields):
     object_list = []
     objects = None
     if element == "tags":
-        objects = TagData.objects.all()
+        objects = GenericData.objects.filter(generictype__name="Tag")
     elif element == "acls":
-        objects = ACLData.objects.all()
+        objects = GenericData.objects.filter(generictype__name="ACL")
     elif element == "policies":
-        objects = PolicyData.objects.all()
+        objects = GenericData.objects.filter(generictype__name="Policy")
 
     if source == "ise":
-        objects = objects.filter(iseserver__description=lookup)
+        objects = objects.filter(element__iseserver__description=lookup)
     elif source == "mdb":
-        objects = objects.filter(organization__orgid=lookup)
+        objects = objects.filter(element__organization__orgid=lookup)
 
     for o in objects:
         object_list.append(o.source_data)
@@ -268,21 +270,26 @@ def exec_show_sync(data, clitext, contextchain):
     # print(data["command"]["command"])
     if data["command"]["command"] == "sync-session":
         object_list = []
-        objects = SyncSession.objects.all()
+        objects = ElementSync.objects.all()
         for o in objects:
+            # new_m = {}
             new_m = {**model_to_dict(o)}
-            new_m["src_organization"] = str(o.src_organization)
-            new_m["src_iseserver"] = str(o.src_iseserver)
-            new_m["Dst Org #"] = len(new_m["dst_organization"])
-            new_m["Dst ISE #"] = len(new_m["dst_iseserver"])
+            if not o.src_element:
+                new_m["source"] = "None"
+            elif o.src_element.iseserver:
+                new_m["source"] = str(o.src_element.iseserver)
+            else:
+                new_m["source"] = str(o.src_element.organization)
+            # new_m = {**new_m, **model_to_dict(o)}
+            new_m["Dst Elm. #"] = len(new_m["dst_element"])
             object_list.append(new_m)
-        out_data = format_data(object_list, excluded_fields=["force_rebuild", "dst_organization", "dst_iseserver"],
+        out_data = format_data(object_list, excluded_fields=["force_rebuild", "dst_element", "src_element"],
                                headers=True)
     return out_data, contextchain
 
 
 def exec_show_parse(data, clitext, contextchain):
-    return "show", contextchain
+    return "", contextchain
 
 
 def exec_show_debug(data, clitext, contextchain):
@@ -383,11 +390,11 @@ def exec_context_sync(data, clitext, contextchain):
     cli_list = shlex.split(clitext)
     was_no = True if data["chain"][0] == "no" else False
     if was_no:
-        SyncSession.objects.filter(description=cli_list[2]).delete()
+        ElementSync.objects.filter(description=cli_list[2]).delete()
         return "", contextchain
     else:
-        obj, c = SyncSession.objects.get_or_create(description=cli_list[1],
-                                                   defaults={"sync_enabled": False, "apply_changes": False})
+        obj, c = ElementSync.objects.get_or_create(description=cli_list[1],
+                                                   defaults={"enabled": False, "apply_changes": False})
 
     curcontext = "sync-config"
     contextchain.append(
@@ -510,7 +517,7 @@ def exec_syncsession_sync(data, clitext, contextchain):
     elif fx_cmd == "meraki-org":
         obj.src_organization = None if was_no else Organization.objects.filter(orgid=last_arg).first()
     elif cmd == "shutdown":
-        obj.sync_enabled = True if was_no else False
+        obj.enabled = True if was_no else False
     elif cmd == "push-changes":
         obj.apply_changes = False if was_no else True
     elif cmd == "reverse-sync":
@@ -520,7 +527,7 @@ def exec_syncsession_sync(data, clitext, contextchain):
 
 
 def exec_syncsession_sync_dest(data, clitext, contextchain):
-    print("exec_syncsession_sync_dest", data["command"].get("fx_command"), data, clitext)
+    # print("exec_syncsession_sync_dest", data["command"].get("fx_command"), data, clitext)
     fx_cmd = data["command"].get("fx_command")
     # cmd = data["command"]["command"]
     was_no = True if data["chain"][0] == "no" else False
@@ -528,17 +535,20 @@ def exec_syncsession_sync_dest(data, clitext, contextchain):
     cli_list = shlex.split(clitext)
     last_arg = cli_list[-1]
     if fx_cmd == "ise-server":
-        ref = ISEServer.objects.filter(description=last_arg).first()
-        if was_no:
-            obj.dst_iseserver.remove(ref)
-        else:
-            obj.dst_iseserver.add(ref)
+        ref = Element.objects.filter(iseserver__description=last_arg).first()
     elif fx_cmd == "meraki-org":
-        ref = Organization.objects.filter(orgid=last_arg).first()
-        if was_no:
-            obj.dst_organization.remove(ref)
-        else:
-            obj.dst_organization.add(ref)
+        ref = Element.objects.filter(organization__orgid=last_arg).first()
+
+    if was_no:
+        obj.dst_element.remove(ref)
+    else:
+        obj.dst_element.add(ref)
+    # elif fx_cmd == "meraki-org":
+    #     ref = Organization.objects.filter(orgid=last_arg).first()
+    #     if was_no:
+    #         obj.dst_organization.remove(ref)
+    #     else:
+    #         obj.dst_organization.add(ref)
     obj.save()
     return "", contextchain
 
@@ -554,3 +564,148 @@ def exec_show_files(data, clitext, contextchain):
         object_list.append(m)
     out_tags = format_data(object_list, excluded_fields=["description", "uploadzip"], headers=True)
     return out_tags, contextchain
+
+
+def exec_show_tag(data, clitext, contextchain):
+    fx_cmd = data["command"].get("fx_command")
+    cli_list = shlex.split(clitext)
+    last_arg = cli_list[-1]
+    objs = []
+    object_list = []
+    excl = ["source_data", "source_ver", "last_sync", "last_update", "last_update_data", "last_update_state",
+            "update_failed", "generictype", "generic"]
+    objs = GenericData.objects.filter(generictype__name="Tag").order_by('generictype__type_order', 'element')
+    if fx_cmd is None:
+        pass
+    elif fx_cmd == "organization":
+        objs = objs.filter(organization__orgid=last_arg)
+        excl.append("iseserver")
+    elif fx_cmd == "meraki-account":
+        objs = objs.filter(organization__dashboard__name=last_arg)
+        excl.append("iseserver")
+    elif fx_cmd == "ise-server":
+        objs = objs.filter(iseserver__name=last_arg)
+        excl.append("organization")
+    elif fx_cmd == "sync-session":
+        # tags = TagData.objects.filter(=last_arg)
+        object_list = []
+    # print("exec_show_tag", fx_cmd, data, clitext, last_arg)
+
+    for o in objs:
+        newo = {}
+        newo["value"] = o.get_data("value")
+        newo["associated_tag"] = str(o.generic)
+        newo = {**newo, **model_to_dict(o)}
+        if o.element.iseserver:
+            newo["element"] = str(o.element.iseserver)
+        else:
+            newo["element"] = str(o.element.organization)
+        # newo["iseserver"] = str(o.element.iseserver)
+        # newo["organization"] = str(o.element.organization)
+        object_list.append(newo)
+
+    out_tags = format_data(object_list, excluded_fields=excl, headers=True)
+    return out_tags, contextchain
+
+
+def exec_show_acl(data, clitext, contextchain):
+    fx_cmd = data["command"].get("fx_command")
+    cli_list = shlex.split(clitext)
+    last_arg = cli_list[-1]
+    objs = []
+    object_list = []
+    excl = ["source_data", "generictype", "generic"]
+    objs = GenericData.objects.filter(generictype__name="ACL").order_by('generictype__type_order', 'element')
+    if fx_cmd is None:
+        pass
+    elif fx_cmd == "organization":
+        objs = objs.filter(organization__orgid=last_arg)
+        excl.append("iseserver")
+    elif fx_cmd == "meraki-account":
+        objs = objs.filter(organization__dashboard__name=last_arg)
+        excl.append("iseserver")
+    elif fx_cmd == "ise-server":
+        objs = objs.filter(iseserver__name=last_arg)
+        excl.append("organization")
+    elif fx_cmd == "sync-session":
+        # tags = TagData.objects.filter(=last_arg)
+        object_list = []
+    # print("exec_show_tag", fx_cmd, data, clitext, last_arg)
+
+    for o in objs:
+        newo = {}
+        newo["name"] = o.get_data("name")
+        newo["associated_acl"] = str(o.generic)
+        newo = {**newo, **model_to_dict(o)}
+        if o.element.iseserver:
+            newo["element"] = str(o.element.iseserver)
+        else:
+            newo["element"] = str(o.element.organization)
+        # newo["iseserver"] = str(o.element.iseserver)
+        # newo["organization"] = str(o.element.organization)
+        object_list.append(newo)
+
+    out_tags = format_data(object_list, excluded_fields=excl, headers=True)
+    return out_tags, contextchain
+
+
+def exec_show_policy(data, clitext, contextchain):
+    fx_cmd = data["command"].get("fx_command")
+    cli_list = shlex.split(clitext)
+    last_arg = cli_list[-1]
+    objs = []
+    object_list = []
+    excl = ["source_data", "generictype", "generic"]
+    objs = GenericData.objects.filter(generictype__name="Policy").order_by('generictype__type_order', 'element')
+    if fx_cmd is None:
+        pass
+    elif fx_cmd == "organization":
+        objs = objs.filter(organization__orgid=last_arg)
+        excl.append("iseserver")
+    elif fx_cmd == "meraki-account":
+        objs = objs.filter(organization__dashboard__name=last_arg)
+        excl.append("iseserver")
+    elif fx_cmd == "ise-server":
+        objs = objs.filter(iseserver__name=last_arg)
+        excl.append("organization")
+    elif fx_cmd == "sync-session":
+        # tags = TagData.objects.filter(=last_arg)
+        object_list = []
+    # print("exec_show_tag", fx_cmd, data, clitext, last_arg)
+
+    for o in objs:
+        newo = {}
+        newo["mapping"] = o.get_data("_{{srcGroupId}}-{{dstGroupId}}||{{sourceSgtId}}-{{destinationSgtId}}::Tag||name::name")
+        newo["associated_policy"] = "Policy :: " + str(o.generic.name) if o.generic else None
+        newo = {**newo, **model_to_dict(o)}
+        if o.element.iseserver:
+            newo["element"] = str(o.element.iseserver)
+        else:
+            newo["element"] = str(o.element.organization)
+        # newo["iseserver"] = str(o.element.iseserver)
+        # newo["organization"] = str(o.element.organization)
+        object_list.append(newo)
+
+    out_tags = format_data(object_list, excluded_fields=excl, headers=True)
+    return out_tags, contextchain
+
+
+def lookup_func(data):
+    headers = {"Authorization": "Bearer 488e377a430d72b3f5e4c16f21a1be455ec515fe"}
+    recs = requests.get("http://127.0.0.1:8000/api/v0/organization/", headers=headers)
+    # recs = getattr(sync.models, data.get("table")).objects.all()
+    rj = recs.json()
+    for r in rj["results"]:
+        print(r)
+    # recs = getattr(sync.models, data.get("table")).objects.all()
+    # for rec in recs:
+    #     print(rec)
+
+    # for rec in await process_django_call(data):
+    #     print(rec)
+
+    # get_objects = await sync_to_async(process_django_call, thread_sensitive=True)(data)
+    # print(get_objects)
+    # print(data)
+
+    return "hi"

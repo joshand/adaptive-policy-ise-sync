@@ -138,3 +138,7 @@ config/*.json
 _config.py
 *.zip
 test.sh
+ise_build.sh
+aps*.*
+.adp_cli_history
+ise.py

@@ -3,6 +3,7 @@
 {% load static %}
 
 {% block content %}
+    <h4 class="md-h4--bold md-font-color--alternate docs-section__title">Data Pipeline</h4>
     <div class="md-data-table" style="width: 100%;">
         <div class="md-data-table__wrapper">
             <table class="testTableClass">
@@ -20,10 +21,10 @@
                 {% for d in data %}
                     <tr>
                         <td>{{ d.element }}</td>
-                        {% if d.stages.s1 %}<td>{{ d.stages.s1|get_state_name }}</td>{% else %}<td>?</td>{% endif %}
-                        {% if d.stages.s2 %}<td>{{ d.stages.s2|get_state_name }}</td>{% else %}<td>?</td>{% endif %}
-                        {% if d.stages.s3 %}<td>{{ d.stages.s3|get_state_name }}</td>{% else %}<td>?</td>{% endif %}
-                        {% if d.stages.s4 %}<td>{{ d.stages.s4|get_state_name }}</td>{% else %}<td>?</td>{% endif %}
+                        {% if d.stages.s1 %}<td>{{ d.stages.s1|get_state_name|safe }}<br>{{ d.stages.s1.last_update }}</td>{% else %}<td>N/A</td>{% endif %}
+                        {% if d.stages.s2 %}<td>{{ d.stages.s2|get_state_name|safe }}<br>{{ d.stages.s1.last_update }}</td>{% else %}<td>N/A</td>{% endif %}
+                        {% if d.stages.s3 %}<td>{{ d.stages.s3|get_state_name|safe }}<br>{{ d.stages.s1.last_update }}</td>{% else %}<td>N/A</td>{% endif %}
+                        {% if d.stages.s4 %}<td>{{ d.stages.s4|get_state_name|safe }}<br>{{ d.stages.s1.last_update }}</td>{% else %}<td>N/A</td>{% endif %}
                         <td>
                             <a href="/home/trbl-logs?filter-id-id={{ d.obj_id }}"><span title="View Logs" class="icon icon-archive_20"></span></a>
                         </td>

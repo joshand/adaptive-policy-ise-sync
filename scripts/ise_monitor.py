@@ -1,12 +1,48 @@
-from sync.models import SyncSession, TagData, ACLData, PolicyData, ISEServer
+from sync.models import SyncSession, TagData, ACLData, PolicyData, ISEServer, DataPipeline
 from django.db.models import F, Q
 from django.utils.timezone import make_aware
 import json
 import datetime
-from scripts.db_trustsec import clean_sgts, clean_sgacls, clean_sgpolicies, merge_sgts, merge_sgacls, merge_sgpolicies
+from scripts.db_trustsec import clean_sgts, clean_sgacls, clean_sgpolicies, merge_sgts, merge_sgacls, \
+    merge_sgpolicies, parse_sgt_data, parse_sgacl_data, parse_sgpolicy_data, clean_sgt_data, clean_sgacl_data, \
+    clean_sgpolicy_data
 from scripts.dblog import append_log, db_log
 from ise import ERS
 import traceback
+
+
+def new_ingest_ise_data(server, log):
+    append_log(log, "ise_monitor::new_ingest_ise_data::Server -", server)
+    dt = make_aware(datetime.datetime.now())
+
+    append_log(log, "ise_monitor::new_ingest_ise_data::Resync -", server.description)
+    ise = ERS(ise_node=server.ipaddress, ers_user=server.username, ers_pass=server.password, verify=False,
+              disable_warnings=True)
+    sgts = ise.get_sgts(detail=True)
+    sgacls = ise.get_sgacls(detail=True)
+    sgpolicies = ise.get_egressmatrixcells(detail=True)
+    append_log(log, "ise_monitor::new_ingest_ise_data::SGTs - ", len(sgts))
+    append_log(log, "ise_monitor::new_ingest_ise_data::SGACLs - ", len(sgacls))
+    append_log(log, "ise_monitor::new_ingest_ise_data::Policies - ", len(sgpolicies))
+    ise = {"sgts": sgts, "sgacls": sgacls, "sgpolicies": sgpolicies}
+
+    server.raw_data = ise
+    server.force_rebuild = False
+    server.last_read = dt
+    server.skip_sync = True
+    server.skip_update = True
+    server.save()
+
+
+def process_ise_data(server, log):
+    if server.raw_data:
+        parse_sgt_data("ise", server, server.raw_data["sgts"].get("response"), log)
+        parse_sgacl_data("ise", server, server.raw_data["sgacls"].get("response"), log)
+        parse_sgpolicy_data("ise", server, server.raw_data["sgpolicies"].get("response"), log)
+
+        clean_sgt_data("ise", server, server.raw_data["sgts"].get("response"), log)
+        clean_sgacl_data("ise", server, server.raw_data["sgacls"].get("response"), log)
+        clean_sgpolicy_data("ise", server, server.raw_data["sgpolicies"].get("response"), log)
 
 
 def ingest_ise_data(accounts, log, server_only=False):
@@ -46,7 +82,7 @@ def ingest_ise_data(accounts, log, server_only=False):
         clean_sgacls("ise", sgacls["response"], src, sa, log, a)
         clean_sgpolicies("ise", sgpolicies["response"], src, sa, log, a)
 
-        a.raw_data = json.dumps(ise)
+        a.raw_data = ise
         a.force_rebuild = False
         a.last_sync = dt
         a.last_update = dt
@@ -385,5 +421,57 @@ def sync_ise():
 
 
 def run():     # pragma: no cover
-    print("sync_ise::run")
-    sync_ise()
+    # print("sync_ise::run")
+    # sync_ise()
+    read_ise()
+
+
+def run_ise_processing():
+    servers = ISEServer.objects.all()
+    for server in servers:
+        log = []
+        append_log(log, "ise_monitor::run_ise_processing::Parsing data into individual elements...")
+        try:
+            process_ise_data(server, log)
+            DataPipeline.objects.update_or_create(iseserver=server, stage=2, defaults={"state": 5})
+
+            dt = make_aware(datetime.datetime.now())
+            server.last_processed = dt
+            server.save()
+        except Exception:
+            append_log(log, "ise_monitor::run_ise_processing::Exception caught:", traceback.format_exc())
+            DataPipeline.objects.update_or_create(iseserver=server, stage=2, defaults={"state": 4})
+
+        append_log(log, "ise_monitor::run_ise_processing::Done")
+        db_log("ise_monitor", log, iseserver=server, append_old=False)
+
+
+def run_ise_ingestion():
+    servers = ISEServer.objects.all()
+    for server in servers:
+        log = []
+        append_log(log, "ise_monitor::run_ise_ingestion::Checking ISE Accounts for re-sync...")
+        if server.enabled:
+            DataPipeline.objects.update_or_create(iseserver=server, stage=1, defaults={"state": 2})
+            try:
+                new_ingest_ise_data(server, log)
+                DataPipeline.objects.update_or_create(iseserver=server, stage=1, defaults={"state": 5})
+            except Exception:
+                append_log(log, "ise_monitor::run_ise_ingestion::Exception caught:", traceback.format_exc())
+                DataPipeline.objects.update_or_create(iseserver=server, stage=1, defaults={"state": 4})
+                continue
+
+            dt = make_aware(datetime.datetime.now())
+            server.last_read = dt
+            server.save()
+        else:
+            append_log(log, "ise_monitor::run_ise_ingestion::This server is disabled; skipping.")
+            DataPipeline.objects.update_or_create(iseserver=server, stage=1, defaults={"state": 3})
+
+        append_log(log, "ise_monitor::run_ise_ingestion::Done")
+        db_log("ise_monitor", log, iseserver=server, append_old=False)
+
+
+def read_ise(data=None):
+    run_ise_ingestion()
+    run_ise_processing()

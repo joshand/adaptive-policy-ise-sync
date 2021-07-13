@@ -59,6 +59,12 @@
                             <td>{{ d.iseserver }}</td>
                         {% elif d.organization %}
                             <td>{{ d.organization }}</td>
+                        {% elif d.syncsession %}
+                            <td>{{ d.syncsession }}</td>
+                        {% elif d.elementsync %}
+                            <td>{{ d.elementsync }}</td>
+                        {% elif d.element %}
+                            <td>{{ d.element }}</td>
                         {% else %}
                             <td>N/A</td>
                         {% endif %}

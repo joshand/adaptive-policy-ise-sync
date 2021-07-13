@@ -62,3 +62,4 @@ webdriver-manager==3.2.2
 websockets==8.1
 yarl==1.6.3
 zipp==3.4.0
+prompt_toolkit

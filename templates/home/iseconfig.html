@@ -6,7 +6,7 @@
         <form method="POST" action="/home/config-ise" style="width:100%;padding:0px">
             <div class="md-data-table" style="width: 100%;">
                 <div class="md-data-table__wrapper">
-                    ISE Configuration  <a onclick="getLog('{{ i.raw_data }}')"><span class="icon icon-file-text_24"></span></a>
+                    ISE Configuration  <a onclick="getLog('{{ i.raw_data|base64encode }}')"><span class="icon icon-file-text_24"></span></a>
                     <table class="testTableClass">
                         <tbody class="md-data-table__tbody">
                             <tr>
@@ -295,18 +295,22 @@
                             <th style="width: 12rem">IP/Hostname</th>
                             <th style="width: 6rem">Enabled</th>
                             <th style="width: 6rem">pxGrid</th>
+                            <th style="width: 6rem">Status</th>
                             <th style="width: 6rem">Action</th>
                         </tr>
                     </thead>
                     <tbody class="md-data-table__tbody">
                         {% for s in servers %}
                             <tr>
-                                <td> {{ s.description }} </td>
+                                <td><a href="/home/config-ise?id={{ s.id }}&action=edit"> {{ s.description }} </a></td>
                                 <td> {{ s.ipaddress }} </td>
                                 <td> {{ s.enabled }} </td>
                                 <td> {{ s.pxgrid_enable }} </td>
+                                <td> {{ s.get_status }}</td>
                                 <td>
-                                    <a title="Edit Configuration" href="/home/config-ise?id={{ s.id }}&action=edit"><span class="icon icon-edit_24"></span></a>
+{#                                    <a title="Edit Configuration" href="/home/config-ise?id={{ s.id }}&action=edit"><span class="icon icon-edit_24"></span></a>#}
+                                    <a onclick="getLog('{{ s.raw_data|base64encode }}')"><span class="icon icon-file-text_24"></span></a>
+                                    <a href="/home/config-ise?action=del&id={{ s.id }}"><span class="icon icon-delete_24"></span></a>
                                 </td>
                             </tr>
                         {% endfor %}
@@ -318,8 +322,8 @@
 
     <script>
     function getLog(data) {
-        let new_dat = data.replaceAll("\"", '"').replaceAll("\n", "\\n");
-        document.getElementById("logdata").innerHTML = "<pre>" + JSON.stringify(JSON.parse(new_dat), null, 4) + "</pre>";
+        let new_data = JSON.stringify(JSON.parse(atob(data)), null, 4);
+        document.getElementById("logdata").innerHTML = "<pre>" + new_data + "</pre>";
         document.getElementById("logmodal").style = "display:inline;";
     }
     </script>

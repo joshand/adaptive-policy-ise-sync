@@ -1,14 +1,17 @@
 from django.contrib import admin
 from sync.models import UploadZip, Upload, Dashboard, ISEServer, SyncSession, Tag, ACL, Policy, Task, Organization,\
-    TagData, ACLData, PolicyData
+    TagData, ACLData, PolicyData, TaskQueue, DataPipeline, APICallTemplate, Element, GenericType, GenericData, Generic,\
+    ElementType, ElementSync, GenericTypeMatchRule, GenericTypeTrigger, BasicMappingTable, AdvancedMappingTable
 
 
 class OrganizationAdmin(admin.ModelAdmin):
-    readonly_fields = ('raw_data', 'last_update', 'last_sync')
+    readonly_fields = ('last_update', 'last_sync')
+    # readonly_fields = ('raw_data', 'last_update', 'last_sync')
 
 
 class ISEServerAdmin(admin.ModelAdmin):
-    readonly_fields = ('raw_data', 'last_update', 'last_sync')
+    readonly_fields = ('last_update', 'last_sync')
+    # readonly_fields = ('raw_data', 'last_update', 'last_sync')
 
 
 class TagAdmin(admin.ModelAdmin):
@@ -51,6 +54,10 @@ class PolicyDataAdmin(admin.ModelAdmin):
                        'update_dest', 'last_update', 'last_update_data', 'last_update_state')
 
 
+class TaskQueueAdmin(admin.ModelAdmin):
+    readonly_fields = ('last_update', 'get_next_run', 'needs_run')
+
+
 admin.site.register(UploadZip)
 admin.site.register(Upload, UploadAdmin)
 admin.site.register(Dashboard)
@@ -65,3 +72,16 @@ admin.site.register(ACLData, ACLDataAdmin)
 admin.site.register(Policy, PolicyAdmin)
 admin.site.register(PolicyData, PolicyDataAdmin)
 admin.site.register(Task, TaskAdmin)
+admin.site.register(TaskQueue, TaskQueueAdmin)
+admin.site.register(DataPipeline)
+admin.site.register(APICallTemplate)
+admin.site.register(ElementType)
+admin.site.register(Element)
+admin.site.register(GenericType)
+admin.site.register(Generic)
+admin.site.register(GenericData)
+admin.site.register(ElementSync)
+admin.site.register(GenericTypeMatchRule)
+admin.site.register(GenericTypeTrigger)
+admin.site.register(BasicMappingTable)
+admin.site.register(AdvancedMappingTable)

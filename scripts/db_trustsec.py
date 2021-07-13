@@ -465,3 +465,93 @@ def merge_sgpolicies(src, sgpolicies, is_base, sync_session, log=None, obj=None)
     except Exception as e:    # pragma: no cover
         append_log(log, "db_trustsec::merge_sgpolicies::Exception in merge_sgpolicies: ", e, traceback.format_exc())
     return changed_objs
+
+
+def parse_sgt_data(src, entity, json_data, log=None):
+    for o in json_data:
+        src_id = o["groupId"] if src == "meraki" else o["id"]
+        if src == "meraki":
+            TagData.objects.update_or_create(organization=entity, source_id=src_id,
+                                             defaults={"source_data": o})
+        else:
+            TagData.objects.update_or_create(iseserver=entity, source_id=src_id,
+                                             defaults={"source_data": o})
+    return None
+
+
+def parse_sgacl_data(src, entity, json_data, log=None):
+    for o in json_data:
+        src_id = o["aclId"] if src == "meraki" else o["id"]
+        if src == "meraki":
+            ACLData.objects.update_or_create(organization=entity, source_id=src_id,
+                                             defaults={"source_data": o})
+        else:
+            ACLData.objects.update_or_create(iseserver=entity, source_id=src_id,
+                                             defaults={"source_data": o})
+    return None
+
+
+def parse_sgpolicy_data(src, entity, json_data, log=None):
+    for o in json_data:
+        src_id = "p" + o["srcGroupId"] + "-" + o["dstGroupId"] if src == "meraki" else o["id"]
+        if src == "meraki":
+            PolicyData.objects.update_or_create(organization=entity, source_id=src_id,
+                                                defaults={"source_data": o})
+        else:
+            PolicyData.objects.update_or_create(iseserver=entity, source_id=src_id,
+                                                defaults={"source_data": o})
+    return None
+
+
+def clean_sgt_data(src, entity, json_data, log=None):
+    src_ids = []
+    for o in json_data:
+        src_id = o["groupId"] if src == "meraki" else o["id"]
+        src_ids.append(src_id)
+
+    if src == "meraki":
+        db_elements = TagData.objects.filter(organization=entity)
+    else:
+        db_elements = TagData.objects.filter(iseserver=entity)
+
+    for e in db_elements:
+        if e.source_id not in src_ids:
+            append_log(log, "db_trustsec::clean_sgt_data::deleting", str(e))
+            e.delete()
+    return None
+
+
+def clean_sgacl_data(src, entity, json_data, log=None):
+    src_ids = []
+    for o in json_data:
+        src_id = o["aclId"] if src == "meraki" else o["id"]
+        src_ids.append(src_id)
+
+    if src == "meraki":
+        db_elements = ACLData.objects.filter(organization=entity)
+    else:
+        db_elements = ACLData.objects.filter(iseserver=entity)
+
+    for e in db_elements:
+        if e.source_id not in src_ids:
+            append_log(log, "db_trustsec::clean_sgacl_data::deleting", str(e))
+            e.delete()
+    return None
+
+
+def clean_sgpolicy_data(src, entity, json_data, log=None):
+    src_ids = []
+    for o in json_data:
+        src_id = "p" + o["srcGroupId"] + "-" + o["dstGroupId"] if src == "meraki" else o["id"]
+        src_ids.append(src_id)
+
+    if src == "meraki":
+        db_elements = PolicyData.objects.filter(organization=entity)
+    else:
+        db_elements = PolicyData.objects.filter(iseserver=entity)
+
+    for e in db_elements:
+        if e.source_id not in src_ids:
+            append_log(log, "db_trustsec::clean_sgpolicy_data::deleting", str(e))
+            e.delete()
+    return None

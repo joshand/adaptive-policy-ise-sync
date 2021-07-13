@@ -3,7 +3,7 @@
 
 {% block content %}
     {% if sync_id %}
-        <form method="POST" action="/home/config-sync" style="width:100%;padding:0px">
+        <form method="POST" action="/home/config-elm-sync" style="width:100%;padding:0px">
             <div class="md-data-table" style="width: 100%;">
                 <div class="md-data-table__wrapper">
                     Sync Configuration
@@ -22,108 +22,53 @@
                                     </div>
                                 </td>
                             </tr>
-                            <tr><td>Source</td><td><table class="testTableClass">
-                                <tr>
-                                    <td style="width: 6rem">ISE Server</td>
-                                    <td style="width: 24rem">
-                                        <div class="md-input-container columns medium-12" id="iseserver-container">
-                                            <div class="md-input__wrapper md-select">
-                                                <button id="iseserver-button-{{ i.id }}" class="ignore md-button md-button--36 active" alt="" type="button" aria-labelledby="iseserver-label-{{ i.id }}" tabindex="30" name="md-select-69" aria-haspopup="listbox" onclick="toggleList('iseserver-button-{{ i.id }}', 'iseserver-dropdown-{{ i.id }}', 'iseserver-list-{{ i.id }}')">
-                                                    <span class="ignore md-button__children" style="opacity: 1;">
-                                                        <div style="font-size: small" class="ignore md-list-item__left" id="iseserver-label-{{ i.id }}">
-                                                            {% if i.src_iseserver %}
-                                                                {{ i.src_iseserver }}
-                                                            {% else %}
-                                                                None
-                                                            {% endif %}
-                                                            <i class="ignore icon icon-arrow-down_16"></i>
-                                                        </div>
-                                                    </span>
-                                                </button>
-                                                <div class="md-event-overlay md-event-overlay--bottom" id="iseserver-dropdown-{{ i.id }}" style="display:none;">
-                                                    <div class="md-event-overlay__children" id="iseserver-list-{{ i.id }}">
-                                                        <div id="iseserver-content" class="md-list md-list--vertical md-list" role="listbox" aria-labelledby="md-select-69__label" aria-multiselectable="false">
-                                                            {% for item in iseservers %}
-                                                            <div aria-current="true" class="md-list-item" id="md-list-73__so-item" role="option" tabindex="0" title="{{ item }}">
-                                                                <div style="font-size: small" class="md-list-item__center" onclick="listclick('{{ item.id }}', '{{ item }}', 'iseserver-label-{{ i.id }}', 'iseserver-id-{{ i.id }}', 'iseserver-name-{{ i.id }}', '')">{{ item }}</div>
-                                                                <div class="md-list-item__right"></div>
-                                                            </div>
-                                                            {% endfor %}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <input type="hidden" id="iseserver-id-{{ i.id }}" name="iseserver-id-{{ i.id }}" value="{{ i.src_iseserver.id }}" />
-                                        <input type="hidden" id="iseserver-name-{{ i.id }}" name="iseserver-name-{{ i.id }}" value="" />
-                                    </td>
-                                    <td style="width: 4rem">-or-</td>
-                                    <td style="width: 6rem">Meraki Organization</td>
-                                    <td style="width: 24rem">
-                                        <div class="md-input-container columns medium-12" id="dashboard-container">
-                                            <div class="md-input__wrapper md-select">
-                                                <button id="dashboard-button-{{ i.id }}" class="ignore md-button md-button--36 active" alt="" type="button" aria-labelledby="dashboard-label-{{ i.id }}" tabindex="30" name="md-select-69" aria-haspopup="listbox" onclick="toggleList('dashboard-button-{{ i.id }}', 'dashboard-dropdown-{{ i.id }}', 'dashboard-list-{{ i.id }}')">
-                                                    <span class="ignore md-button__children" style="opacity: 1;">
-                                                        <div style="font-size: small" class="ignore md-list-item__left" id="dashboard-label-{{ i.id }}">
-                                                            {% if i.src_organization %}
-                                                                {{ i.src_organization }}
-                                                            {% else %}
-                                                                None
-                                                            {% endif %}
-                                                            <i class="ignore icon icon-arrow-down_16"></i>
-                                                        </div>
-                                                    </span>
-                                                </button>
-                                                <div class="md-event-overlay md-event-overlay--bottom" id="dashboard-dropdown-{{ i.id }}" style="display:none;">
-                                                    <div class="md-event-overlay__children" id="dashboard-list-{{ i.id }}">
-                                                        <div id="dashboard-content" class="md-list md-list--vertical md-list" role="listbox" aria-labelledby="md-select-69__label" aria-multiselectable="false">
-                                                            {% for item in organizations %}
-                                                            <div aria-current="true" class="md-list-item" id="md-list-73__so-item" role="option" tabindex="0" title="{{ item }}">
-                                                                <div style="font-size: small" class="md-list-item__center" onclick="listclick('{{ item.id }}', '{{ item }}', 'dashboard-label-{{ i.id }}', 'dashboard-id-{{ i.id }}', 'dashboard-name-{{ i.id }}', '')">{{ item }}</div>
-                                                                <div class="md-list-item__right"></div>
-                                                            </div>
-                                                            {% endfor %}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <input type="hidden" id="dashboard-id-{{ i.id }}" name="dashboard-id-{{ i.id }}" value="{{ i.src_organization.id }}" />
-                                        <input type="hidden" id="dashboard-name-{{ i.id }}" name="dashboard-name-{{ i.id }}" value="" />
-                                    </td>
-
-                                </tr>
-                            </table></td></tr>
                             <tr>
-                                <td style="width: 4rem">Destination<br>ISE Server(s)</td>
+                                <td style="width: 6rem">Element</td>
                                 <td style="width: 24rem">
-                                    {% for obj in iseservers %}
-                                    <div class="md-input-container md-checkbox">
-                                        {% if obj in i.dst_iseserver.all %}
-                                            <input name="dstIse-{{ obj.id }}" id="dstIse-{{ obj.id }}" type="checkbox" class="md-input md-checkbox__input" checked>
-                                        {% else %}
-                                            <input name="dstIse-{{ obj.id }}" id="dstIse-{{ obj.id }}" type="checkbox" class="md-input md-checkbox__input">
-                                        {% endif %}
-                                        <label class="md-checkbox__label" for="dstIse-{{ obj.id }}">
-                                            <span>{{ obj }}</span>
-                                        </label>
+                                    <div class="md-input-container columns medium-12" id="element-container">
+                                        <div class="md-input__wrapper md-select">
+                                            <button id="element-button-{{ i.id }}" class="ignore md-button md-button--36 active" alt="" type="button" aria-labelledby="element-label-{{ i.id }}" tabindex="30" name="md-select-69" aria-haspopup="listbox" onclick="toggleList('element-button-{{ i.id }}', 'element-dropdown-{{ i.id }}', 'element-list-{{ i.id }}')">
+                                                <span class="ignore md-button__children" style="opacity: 1;">
+                                                    <div style="font-size: small" class="ignore md-list-item__left" id="element-label-{{ i.id }}">
+                                                        {% if i.src_element %}
+                                                            {{ i.src_element }}
+                                                        {% else %}
+                                                            None
+                                                        {% endif %}
+                                                        <i class="ignore icon icon-arrow-down_16"></i>
+                                                    </div>
+                                                </span>
+                                            </button>
+                                            <div class="md-event-overlay md-event-overlay--bottom" id="element-dropdown-{{ i.id }}" style="display:none;">
+                                                <div class="md-event-overlay__children" id="element-list-{{ i.id }}">
+                                                    <div id="element-content" class="md-list md-list--vertical md-list" role="listbox" aria-labelledby="md-select-69__label" aria-multiselectable="false">
+                                                        {% for item in elements %}
+                                                        <div aria-current="true" class="md-list-item" id="md-list-73__so-item" role="option" tabindex="0" title="{{ item }}">
+                                                            <div style="font-size: small" class="md-list-item__center" onclick="listclick('{{ item.id }}', '{{ item }}', 'element-label-{{ i.id }}', 'element-id-{{ i.id }}', 'element-name-{{ i.id }}', '')">{{ item }}</div>
+                                                            <div class="md-list-item__right"></div>
+                                                        </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    {% endfor %}
+                                    <input type="hidden" id="element-id-{{ i.id }}" name="element-id-{{ i.id }}" value="{{ i.src_element.id }}" />
+                                    <input type="hidden" id="element-name-{{ i.id }}" name="element-name-{{ i.id }}" value="" />
                                 </td>
                             </tr>
-{#                            <tr><td>-or-</td><td>&nbsp;</td></tr>#}
                             <tr>
-                                <td style="width: 4rem">Destination<br>Organization(s)</td>
+                                <td style="width: 4rem">Destination<br>Element(s)</td>
                                 <td style="width: 24rem">
-                                    {% for obj in organizations %}
+                                    {% for obj in elements %}
                                     <div class="md-input-container md-checkbox">
-                                        {% if obj in i.dst_organization.all %}
-                                            <input name="dstOrg-{{ obj.id }}" id="dstOrg-{{ obj.id }}" type="checkbox" class="md-input md-checkbox__input" checked>
+                                        {% if obj in i.dst_element.all %}
+                                            <input name="dstElm-{{ obj.id }}" id="dstElm-{{ obj.id }}" type="checkbox" class="md-input md-checkbox__input" checked>
                                         {% else %}
-                                            <input name="dstOrg-{{ obj.id }}" id="dstOrg-{{ obj.id }}" type="checkbox" class="md-input md-checkbox__input">
+                                            <input name="dstElm-{{ obj.id }}" id="dstElm-{{ obj.id }}" type="checkbox" class="md-input md-checkbox__input">
                                         {% endif %}
-                                        <label class="md-checkbox__label" for="dstOrg-{{ obj.id }}">
-                                            <span>{{ obj }}</span>
+                                        <label class="md-checkbox__label" for="dstElm-{{ obj.id }}">
+                                            <span>{{ obj.display_name }}</span>
                                         </label>
                                     </div>
                                     {% endfor %}
@@ -221,7 +166,7 @@
                             <div class="row" style="align-content:center; display:flex">
                                 <div class="md-input-container columns medium-6">
                                     <div class="md-input__wrapper">
-                                        <button class="md-button md-button--blue" tabindex="50">Save Changes</button> or <a href="/home/config-sync">cancel</a>
+                                        <button class="md-button md-button--blue" tabindex="50">Save Changes</button> or <a href="/home/config-elm-sync">cancel</a>
                                     </div>
                                 </div>
                             </div>
@@ -231,7 +176,7 @@
             </div>
         </form>
     {% else %}
-        <h4 class="md-h4--bold md-font-color--alternate docs-section__title">Synchronizations  <a title="Add Sync" href="/home/config-sync?id=new"><span class="icon icon-document-create_16"></span></a></h4>
+        <h4 class="md-h4--bold md-font-color--alternate docs-section__title">Synchronizations  <a title="Add Sync" href="/home/config-elm-sync?id=new"><span class="icon icon-document-create_16"></span></a></h4>
         <div class="md-data-table" style="width: 100%;">
             <div class="md-data-table__wrapper">
                 <table class="testTableClass">
@@ -249,27 +194,20 @@
                     <tbody class="md-data-table__tbody">
                         {% for s in data %}
                             <tr>
-                                <td><a href="/home/config-sync?id={{ s.id }}&action=edit"> {{ s.description }} </a></td>
+                                <td><a href="/home/config-elm-sync?id={{ s.id }}&action=edit"> {{ s.description }} </a></td>
                                 <td> {{ s.enabled }} </td>
                                 <td> {{ s.reverse_sync }} </td>
-                                {% if s.src_iseserver %}
-                                    <td> {{ s.src_iseserver }} </td>
-                                {% else %}
-                                    <td> {{ s.src_organization }} </td>
-                                {% endif %}
+                                <td> {{ s.src_element }} </td>
                                 <td>
-                                {% for obj in s.dst_iseserver.all %}
-                                    {{ obj }}<br>
-                                {% endfor %}
-                                {% for obj in s.dst_organization.all %}
+                                {% for obj in s.dst_element.all %}
                                     {{ obj }}<br>
                                 {% endfor %}
                                 </td>
                                 <td> {{ s.get_status }}</td>
                                 <td>
 {#                                    <a onclick="getLog('{{ s.raw_data|base64encode }}')"><span class="icon icon-file-text_24"></span></a>#}
-                                    <a href="/home/status-sync?id={{ s.id }}"><span title="View Sync Preview" class="icon icon-archive_20"></span></a>
-                                    <a href="/home/config-sync?action=del&id={{ s.id }}"><span title="Delete Sync Configuration" class="icon icon-delete_24"></span></a>
+                                    <a href="/home/status-elm-sync?id={{ s.id }}"><span title="View Sync Preview" class="icon icon-archive_20"></span></a>
+                                    <a href="/home/config-elm-sync?action=del&id={{ s.id }}"><span title="Delete Sync Configuration" class="icon icon-delete_24"></span></a>
                                 </td>
                             </tr>
                         {% endfor %}

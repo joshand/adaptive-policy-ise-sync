@@ -139,6 +139,138 @@ context["root"] = [
             "command": "sync-session",
             "help": "Sync Session show commands",
             "function": "exec_show_sync"
+        }, {
+            "command": "tags",
+            "help": "Tag (SGT) show commands",
+            "function": "exec_show_tag",
+            "subcommands": [
+                {
+                    "command": "organization",
+                    "optional": True,
+                    "help": "Tag (SGT) Organization show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "organization",
+                        "_lookup": {"table": "Organization", "val1": "orgid", "val2": "orgid"},
+                        "help": "Meraki \"Organization ID\""
+                    }]
+                }, {
+                    "command": "meraki-account",
+                    "optional": True,
+                    "help": "Tag (SGT) Meraki Account show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "meraki-account",
+                        "help": "Meraki Account \"description\""
+                    }]
+                }, {
+                    "command": "ise-server",
+                    "optional": True,
+                    "help": "Tag (SGT) ISE Server show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "ise-server",
+                        "help": "ISE Server \"description\""
+                    }]
+                }, {
+                    "command": "sync-session",
+                    "optional": True,
+                    "help": "Tag (SGT) Sync Session show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "sync-session",
+                        "help": "Sync Server \"description\""
+                    }]
+                }
+            ]
+        }, {
+            "command": "acls",
+            "help": "ACL (SGACL) show commands",
+            "function": "exec_show_acl",
+            "subcommands": [
+                {
+                    "command": "organization",
+                    "optional": True,
+                    "help": "ACL (SGACL) Organization show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "organization",
+                        "_lookup": {"table": "Organization", "val1": "orgid", "val2": "orgid"},
+                        "help": "Meraki \"Organization ID\""
+                    }]
+                }, {
+                    "command": "meraki-account",
+                    "optional": True,
+                    "help": "ACL (SGACL) Meraki Account show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "meraki-account",
+                        "help": "Meraki Account \"description\""
+                    }]
+                }, {
+                    "command": "ise-server",
+                    "optional": True,
+                    "help": "ACL (SGACL) ISE Server show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "ise-server",
+                        "help": "ISE Server \"description\""
+                    }]
+                }, {
+                    "command": "sync-session",
+                    "optional": True,
+                    "help": "ACL (SGACL) Sync Session show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "sync-session",
+                        "help": "Sync Server \"description\""
+                    }]
+                }
+            ]
+        }, {
+            "command": "policies",
+            "help": "Policy show commands",
+            "function": "exec_show_policy",
+            "subcommands": [
+                {
+                    "command": "organization",
+                    "optional": True,
+                    "help": "Policy Organization show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "organization",
+                        "_lookup": {"table": "Organization", "val1": "orgid", "val2": "orgid"},
+                        "help": "Meraki \"Organization ID\""
+                    }]
+                }, {
+                    "command": "meraki-account",
+                    "optional": True,
+                    "help": "Policy Meraki Account show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "meraki-account",
+                        "help": "Meraki Account \"description\""
+                    }]
+                }, {
+                    "command": "ise-server",
+                    "optional": True,
+                    "help": "Policy ISE Server show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "ise-server",
+                        "help": "ISE Server \"description\""
+                    }]
+                }, {
+                    "command": "sync-session",
+                    "optional": True,
+                    "help": "Policy Sync Session show commands",
+                    "subcommands": [{
+                        "command": "%W",
+                        "fx_command": "sync-session",
+                        "help": "Sync Server \"description\""
+                    }]
+                }
+            ]
         }],
         "function": "exec_show_parse",
         "help": "show information for a given object"
