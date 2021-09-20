@@ -94,7 +94,7 @@
 ```
 mkdir $HOME/adaptivepolicy
 docker pull joshand/adaptive-policy-ise-sync:latest
-docker run -it -p 8000:8020 \
+docker run -d -p 8000:8020 \
      --restart unless-stopped \
      --name=Adaptive-Policy-ISE-Sync \
      -e DJANGO_SUPERUSER_USERNAME=admin \
@@ -104,9 +104,33 @@ docker run -it -p 8000:8020 \
      -v $HOME/adaptivepolicy:/opt/app/adaptive_policy_sync/config \
      joshand/adaptive-policy-ise-sync:latest
 ```
+#### Use Docker-Compose<a name="deploy-compose"/> ([^ Top](#top))
+
+1) install docker-compose here: [Docker Compose Install Guide](https://docs.docker.com/compose/install/)
+2) Clone the repo and find the file named `docker-compose.yaml`
+3) either keep the file in the folder, or move to the file to a desirable location.
+4) The script will by default create the persistent volume within the current user's home folder which can be modified by adjusting the volumes configuration to reflect a different folder
+5) run the command: `docker-compose pull` and then `docker-compose up -d`
+6) Alternatively, create your own docker-compose.yaml file with the following contents:
+```
+version: "3"
+services:
+  adaptivesync:
+    image: joshand/adaptive-policy-ise-sync:latest
+    container_name: adaptive_sync
+    environment:
+      - DJANGO_SUPERUSER_USERNAME=admin
+      - DJANGO_SUPERUSER_PASSWORD=password
+      - DJANGO_SUPERUSER_EMAIL=admin@example.com
+      - DJANGO_SUPERUSER_APIKEY=1234567890abcdefghijklmnopqrstuvwxyz1234
+    volumes:
+      - ~/adaptivepolicy:/opt/app/adaptive_policy_sync/config
+    ports:
+      - 8000:8020
+    restart: unless-stopped
+```
 
 #### Clone the Github repo and run locally<a name="deploy-local"/> ([^ Top](#top))
-```
 git clone https://github.com/meraki/adaptive-policy-ise-sync.git
 cd adaptive-policy-ise-sync/
 virtualenv venv --python=python3
